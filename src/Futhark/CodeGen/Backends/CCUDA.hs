@@ -73,8 +73,8 @@ compileProg version prog = do
           GC.opsCompiler = callKernel,
           GC.opsFatMemory = True,
           GC.opsCritical =
-            ( [C.citems|CUDA_SUCCEED_FATAL(cuCtxPushCurrent(ctx->cu_ctx));|],
-              [C.citems|CUDA_SUCCEED_FATAL(cuCtxPopCurrent(&ctx->cu_ctx));|]
+            ( [C.citems|CUDA_SUCCEED_FATAL((ctx->cfg->cuCtxPushCurrent)(ctx->cu_ctx));|],
+              [C.citems|CUDA_SUCCEED_FATAL((ctx->cfg->cuCtxPopCurrent)(&ctx->cu_ctx));|]
             )
         }
     cuda_includes =
@@ -149,7 +149,7 @@ writeCUDAScalar mem idx t "device" _ val@C.Const {} = do
     [C.citem|{static $ty:t $id:val' = $exp:val;
               $items:bef
               CUDA_SUCCEED_OR_RETURN(
-                cuMemcpyHtoDAsync($exp:mem + $exp:idx * sizeof($ty:t),
+                (ctx->cfg->cuMemcpyHtoDAsync)($exp:mem + $exp:idx * sizeof($ty:t),
                                   &$id:val',
                                   sizeof($ty:t),
                                   0));
@@ -162,7 +162,7 @@ writeCUDAScalar mem idx t "device" _ val = do
     [C.citem|{$ty:t $id:val' = $exp:val;
                   $items:bef
                   CUDA_SUCCEED_OR_RETURN(
-                    cuMemcpyHtoD($exp:mem + $exp:idx * sizeof($ty:t),
+                    (ctx->cfg->cuMemcpyHtoD)($exp:mem + $exp:idx * sizeof($ty:t),
                                  &$id:val',
                                  sizeof($ty:t)));
                   $items:aft
@@ -181,7 +181,7 @@ readCUDAScalar mem idx t "device" _ = do
        {
        $items:bef
        CUDA_SUCCEED_OR_RETURN(
-          cuMemcpyDtoH(&$id:val,
+          (ctx->cfg->cuMemcpyDtoH)(&$id:val,
                        $exp:mem + $exp:idx * sizeof($ty:t),
                        sizeof($ty:t)));
        $items:aft
@@ -220,15 +220,15 @@ copyCUDAMemory b dstmem dstidx dstSpace srcmem srcidx srcSpace nbytes = do
     dst = [C.cexp|$exp:dstmem + $exp:dstidx|]
     src = [C.cexp|$exp:srcmem + $exp:srcidx|]
     memcpyFun GC.CopyBarrier DefaultSpace (Space "device") =
-      ([C.cexp|cuMemcpyDtoH($exp:dst, $exp:src, $exp:nbytes)|], copyDevToHost)
+      ([C.cexp|(ctx->cfg->cuMemcpyDtoH)($exp:dst, $exp:src, $exp:nbytes)|], copyDevToHost)
     memcpyFun GC.CopyBarrier (Space "device") DefaultSpace =
-      ([C.cexp|cuMemcpyHtoD($exp:dst, $exp:src, $exp:nbytes)|], copyHostToDev)
+      ([C.cexp|(ctx->cfg->cuMemcpyHtoD)($exp:dst, $exp:src, $exp:nbytes)|], copyHostToDev)
     memcpyFun _ (Space "device") (Space "device") =
-      ([C.cexp|cuMemcpy($exp:dst, $exp:src, $exp:nbytes)|], copyDevToDev)
+      ([C.cexp|(ctx->cfg->cuMemcpy)($exp:dst, $exp:src, $exp:nbytes)|], copyDevToDev)
     memcpyFun GC.CopyNoBarrier DefaultSpace (Space "device") =
-      ([C.cexp|cuMemcpyDtoHAsync($exp:dst, $exp:src, $exp:nbytes, 0)|], copyDevToHost)
+      ([C.cexp|(ctx->cfg->cuMemcpyDtoHAsync)($exp:dst, $exp:src, $exp:nbytes, 0)|], copyDevToHost)
     memcpyFun GC.CopyNoBarrier (Space "device") DefaultSpace =
-      ([C.cexp|cuMemcpyHtoDAsync($exp:dst, $exp:src, $exp:nbytes, 0)|], copyHostToDev)
+      ([C.cexp|(ctx->cfg->cuMemcpyHtoDAsync)($exp:dst, $exp:src, $exp:nbytes, 0)|], copyHostToDev)
     memcpyFun _ _ _ =
       error $
         "Cannot copy to '"
@@ -341,14 +341,14 @@ callKernel (LaunchKernel safety kernel_name args num_blocks block_size) = do
       }
       $items:bef
       CUDA_SUCCEED_OR_RETURN(
-        cuLaunchKernel(ctx->program->$id:kernel_name,
+        (ctx->cfg->cuLaunchKernel)(ctx->program->$id:kernel_name,
                        grid[0], grid[1], grid[2],
                        $exp:block_x, $exp:block_y, $exp:block_z,
                        $exp:shared_tot, NULL,
                        $id:args_arr, NULL));
       $items:aft
       if (ctx->debugging) {
-        CUDA_SUCCEED_FATAL(cuCtxSynchronize());
+        CUDA_SUCCEED_FATAL((ctx->cfg->cuCtxSynchronize)());
         $id:time_end = get_wall_time();
         fprintf(ctx->log, "Kernel %s runtime: %ldus\n",
                 $string:(prettyString kernel_name), $id:time_end - $id:time_start);
