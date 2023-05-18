@@ -42,12 +42,12 @@ profilingEnclosure name =
         pevents = cuda_get_events(ctx,
                                   &ctx->program->$id:(kernelRuns name),
                                   &ctx->program->$id:(kernelRuntime name));
-        CUDA_SUCCEED_FATAL(ctx->cfg->cudaEventRecord(pevents[0], 0));
+        CUDA_SUCCEED_FATAL((ctx->cfg->cudaEventRecord)(pevents[0], 0));
       }
       |],
     [C.citems|
       if (pevents != NULL) {
-        CUDA_SUCCEED_FATAL(ctx->cfg->cudaEventRecord(pevents[1], 0));
+        CUDA_SUCCEED_FATAL((ctx->cfg->cudaEventRecord)(pevents[1], 0));
       }
       |]
   )
