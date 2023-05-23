@@ -145,7 +145,6 @@ defineMemorySpace space = do
                       desc, block->desc, $string:spacedesc, *(block->references));
     }
     if (*(block->references) == 0) {
-      ctx->$id:usagename -= block->size;
       $items:free
       free(block->references);
       if (ctx->detail_memory) {
@@ -189,14 +188,15 @@ defineMemorySpace space = do
     fprintf(ctx->log, ".\n");
   }
 
+  size_t out_size = 0;
   $items:alloc
 
   if (ctx->error == NULL) {
+    // FIXME FIXME: check that size is actually not greater than out_size.
     block->references = (int*) malloc(sizeof(int));
     *(block->references) = 1;
-    block->size = size;
+    block->size = (size_t)size;
     block->desc = desc;
-    ctx->$id:usagename += size;
     return FUTHARK_SUCCESS;
   } else {
     // We are naively assuming that any memory allocation error is due to OOM.

@@ -654,11 +654,9 @@ readScalarPointerWithQuals quals_f dest i elemtype space vol = do
 
 criticalSection :: Operations op s -> [C.BlockItem] -> [C.BlockItem]
 criticalSection ops x =
-  [C.citems|lock_lock(&ctx->lock);
-            $items:(fst (opsCritical ops))
+  [C.citems|$items:(fst (opsCritical ops))
             $items:x
             $items:(snd (opsCritical ops))
-            lock_unlock(&ctx->lock);
            |]
 
 -- | The generated code must define a context struct with this name.

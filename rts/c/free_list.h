@@ -16,7 +16,7 @@ struct free_list {
   struct free_list_entry *entries; // Pointer to entries.
   int capacity;                    // Number of entries.
   int used;                        // Number of valid entries.
-  lock_t lock;                     // Thread safety.
+  //lock_t lock;                     // Thread safety.
 };
 
 static void free_list_init(struct free_list *l) {
@@ -26,12 +26,12 @@ static void free_list_init(struct free_list *l) {
   for (int i = 0; i < l->capacity; i++) {
     l->entries[i].valid = 0;
   }
-  create_lock(&l->lock);
+  //create_lock(&l->lock);
 }
 
 // Remove invalid entries from the free list.
 static void free_list_pack(struct free_list *l) {
-  lock_lock(&l->lock);
+  //lock_lock(&l->lock);
   int p = 0;
   for (int i = 0; i < l->capacity; i++) {
     if (l->entries[i].valid) {
@@ -51,13 +51,13 @@ static void free_list_pack(struct free_list *l) {
   }
   l->entries = realloc(l->entries, p * sizeof(struct free_list_entry));
   l->capacity = p;
-  lock_unlock(&l->lock);
+  //lock_unlock(&l->lock);
 }
 
 static void free_list_destroy(struct free_list *l) {
   assert(l->used == 0);
   free(l->entries);
-  free_lock(&l->lock);
+  //free_lock(&l->lock);
 }
 
 // Not part of the interface, so no locking.
@@ -72,7 +72,7 @@ static int free_list_find_invalid(struct free_list *l) {
 }
 
 static void free_list_insert(struct free_list *l, size_t size, fl_mem mem, const char *tag) {
-  lock_lock(&l->lock);
+  //lock_lock(&l->lock);
   int i = free_list_find_invalid(l);
 
   if (i == l->capacity) {
@@ -92,48 +92,48 @@ static void free_list_insert(struct free_list *l, size_t size, fl_mem mem, const
   l->entries[i].tag = tag;
 
   l->used++;
-  lock_unlock(&l->lock);
+  //lock_unlock(&l->lock);
 }
 
 // Determine whether this entry in the free list is acceptable for
 // satisfying the request.  Not public, so no locking.
-static bool free_list_acceptable(size_t size, const char* tag, struct free_list_entry *entry) {
+static int free_list_acceptable(size_t size, const char *tag, const struct free_list_entry *entry) {
   // We check not just the hard requirement (is the entry acceptable
   // and big enough?) but also put a cap on how much wasted space
   // (internal fragmentation) we allow.  This is necessarily a
   // heuristic, and a crude one.
 
   if (!entry->valid) {
-    return false;
+    return 0;
   }
 
   if (size > entry->size) {
-    return false;
+    return 0;
   }
 
   // We know the block fits.  Now the question is whether it is too
   // big.  Our policy is as follows:
   //
-  // 1) We don't care about wasted space below 4096 bytes (to avoid
+  // 1) We don't care about wasted space below 128 bytes (to avoid
   // churn in tiny allocations).
   //
   // 2) If the tag matches, we allow _any_ amount of wasted space.
   //
   // 3) Otherwise we allow up to 50% wasted space.
 
-  if (entry->size < 4096) {
-    return true;
+  if (entry->size <= 128) {
+    return 1;
   }
 
-  if (entry->tag == tag) {
-    return true;
+  if (entry->tag != NULL && tag != NULL && (entry->tag == tag || strcmp(entry->tag, tag) == 0)) {
+    return 1;
   }
 
   if (entry->size < size * 2) {
-    return true;
+    return 1;
   }
 
-  return false;
+  return 0;
 }
 
 // Find and remove a memory block of the indicated tag, or if that
@@ -141,7 +141,7 @@ static bool free_list_acceptable(size_t size, const char* tag, struct free_list_
 // Returns 0 on success.
 static int free_list_find(struct free_list *l, size_t size, const char *tag,
                           size_t *size_out, fl_mem *mem_out) {
-  lock_lock(&l->lock);
+  //lock_lock(&l->lock);
   int size_match = -1;
   int i;
   int ret = 1;
@@ -161,14 +161,14 @@ static int free_list_find(struct free_list *l, size_t size, const char *tag,
     l->used--;
     ret = 0;
   }
-  lock_unlock(&l->lock);
+  //lock_unlock(&l->lock);
   return ret;
 }
 
 // Remove the first block in the free list.  Returns 0 if a block was
 // removed, and nonzero if the free list was already empty.
 static int free_list_first(struct free_list *l, fl_mem *mem_out) {
-  lock_lock(&l->lock);
+  //lock_lock(&l->lock);
   int ret = 1;
   for (int i = 0; i < l->capacity; i++) {
     if (l->entries[i].valid) {
@@ -179,7 +179,7 @@ static int free_list_first(struct free_list *l, fl_mem *mem_out) {
       break;
     }
   }
-  lock_unlock(&l->lock);
+  //lock_unlock(&l->lock);
   return ret;
 }
 

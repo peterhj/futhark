@@ -72,10 +72,11 @@ compileProg version prog = do
           GC.opsMemoryType = cudaMemoryType,
           GC.opsCompiler = callKernel,
           GC.opsFatMemory = True,
-          GC.opsCritical =
-            ( [C.citems|CUDA_SUCCEED_FATAL((ctx->cfg->cuCtxPushCurrent)(ctx->cu_ctx));|],
-              [C.citems|CUDA_SUCCEED_FATAL((ctx->cfg->cuCtxPopCurrent)(&ctx->cu_ctx));|]
-            )
+          --GC.opsCritical =
+          --  ( [C.citems|CUDA_SUCCEED_FATAL((ctx->cfg->cuCtxPushCurrent)(ctx->cu_ctx));|],
+          --    [C.citems|CUDA_SUCCEED_FATAL((ctx->cfg->cuCtxPopCurrent)(&ctx->cu_ctx));|]
+          --  )
+          GC.opsCritical = mempty
         }
     cuda_includes =
       [untrimming|
@@ -200,7 +201,7 @@ allocateCUDABuffer mem size tag "device" =
     [C.cstm|ctx->error =
      CUDA_SUCCEED_NONFATAL(cuda_alloc(ctx, ctx->log,
                                       (size_t)$exp:size, $exp:tag,
-                                      &$exp:mem, (size_t*)&$exp:size));|]
+                                      &$exp:mem, &out_size));|]
 allocateCUDABuffer _ _ _ space =
   error $ "Cannot allocate in '" ++ space ++ "' memory space."
 

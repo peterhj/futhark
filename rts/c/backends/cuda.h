@@ -65,6 +65,9 @@ struct futhark_context_config {
   int default_grid_size_changed;
   int default_tile_size_changed;
 
+  CUresult (*gpu_alloc)(CUdeviceptr *, size_t);
+  CUresult (*gpu_free)(CUdeviceptr);
+
   CUresult (*cuGetErrorString)(int, const char **);
   CUresult (*cuInit)(unsigned int);
   CUresult (*cuDeviceGetCount)(int *);
@@ -111,6 +114,14 @@ struct futhark_context_config {
                              void **,
                              void **);
 };
+
+void futhark_context_config_set_gpu_alloc(struct futhark_context_config *cfg, void *ptr) {
+  cfg->gpu_alloc = ptr;
+}
+
+void futhark_context_config_set_gpu_free(struct futhark_context_config *cfg, void *ptr) {
+  cfg->gpu_free = ptr;
+}
 
 void futhark_context_config_set_cuGetErrorString(struct futhark_context_config *cfg, void *ptr) {
   cfg->cuGetErrorString = ptr;
@@ -1015,7 +1026,7 @@ static CUresult cuda_alloc(struct futhark_context *ctx, FILE *log,
         fprintf(log, "Found a free block, but it was too small.\n");
       }
 
-      CUresult res = (ctx->cfg->cuMemFree)(*mem_out);
+      CUresult res = (ctx->cfg->gpu_free)(*mem_out);
       if (res != CUDA_SUCCESS) {
         return res;
       }
@@ -1028,18 +1039,18 @@ static CUresult cuda_alloc(struct futhark_context *ctx, FILE *log,
     fprintf(log, "Actually allocating the desired block.\n");
   }
 
-  CUresult res = (ctx->cfg->cuMemAlloc)(mem_out, min_size);
+  CUresult res = (ctx->cfg->gpu_alloc)(mem_out, min_size);
   while (res == CUDA_ERROR_OUT_OF_MEMORY) {
     CUdeviceptr mem;
     if (free_list_first(&ctx->cu_free_list, (fl_mem*)&mem) == 0) {
-      res = (ctx->cfg->cuMemFree)(mem);
+      res = (ctx->cfg->gpu_free)(mem);
       if (res != CUDA_SUCCESS) {
         return res;
       }
     } else {
       break;
     }
-    res = (ctx->cfg->cuMemAlloc)(mem_out, min_size);
+    res = (ctx->cfg->gpu_alloc)(mem_out, min_size);
   }
 
   return res;
@@ -1055,7 +1066,7 @@ static CUresult cuda_free_all(struct futhark_context *ctx) {
   CUdeviceptr mem;
   free_list_pack(&ctx->cu_free_list);
   while (free_list_first(&ctx->cu_free_list, (fl_mem*)&mem) == 0) {
-    CUresult res = (ctx->cfg->cuMemFree)(mem);
+    CUresult res = (ctx->cfg->gpu_free)(mem);
     if (res != CUDA_SUCCESS) {
       return res;
     }
