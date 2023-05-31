@@ -204,7 +204,7 @@ defineMemorySpace space = do
     // glory despite our naiveté.
 
     // We cannot use set_error() here because we want to replace the old error.
-    lock_lock(&ctx->error_lock);
+    //lock_lock(&ctx->error_lock);
     char *old_error = ctx->error;
     ctx->error = msgprintf("Failed to allocate memory in %s.\nAttempted allocation: %12lld bytes\nCurrently allocated:  %12lld bytes\n%s",
                            $string:spacedesc,
@@ -212,7 +212,7 @@ defineMemorySpace space = do
                            (long long) ctx->$id:usagename,
                            old_error);
     free(old_error);
-    lock_unlock(&ctx->error_lock);
+    //lock_unlock(&ctx->error_lock);
     return FUTHARK_OUT_OF_MEMORY;
   }
   }|]
@@ -407,7 +407,6 @@ $utilH
 $cacheH
 $halfH
 $timingH
-$lockH
 $freeListH
 |]
 

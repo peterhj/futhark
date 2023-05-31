@@ -25,5 +25,6 @@ static void backend_context_config_setup(struct futhark_context_config* cfg);
 static void backend_context_config_teardown(struct futhark_context_config* cfg);
 static int backend_context_setup(struct futhark_context *ctx);
 static void backend_context_teardown(struct futhark_context *ctx);
+static void backend_context_reset(struct futhark_context *ctx);
 
 // End of of context_prototypes.h

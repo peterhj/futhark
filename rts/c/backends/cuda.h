@@ -67,6 +67,8 @@ struct futhark_context_config {
 
   CUresult (*gpu_alloc)(CUdeviceptr *, size_t);
   CUresult (*gpu_free)(CUdeviceptr);
+  CUresult (*gpu_back_alloc)(CUdeviceptr *, size_t);
+  CUresult (*gpu_back_free)(CUdeviceptr);
 
   CUresult (*cuGetErrorString)(int, const char **);
   CUresult (*cuInit)(unsigned int);
@@ -74,7 +76,9 @@ struct futhark_context_config {
   CUresult (*cuDeviceGetName)(char *, int, int);
   CUresult (*cuDeviceGet)(int *, int);
   CUresult (*cuDeviceGetAttribute)(int *, CUdevice_attribute, int);
-  CUresult (*cuCtxCreate)(CUcontext *, unsigned int, int);
+  CUresult (*cuDevicePrimaryCtxRetain)(CUcontext *, CUdevice);
+  CUresult (*cuDevicePrimaryCtxRelease)(CUdevice);
+  CUresult (*cuCtxCreate)(CUcontext *, unsigned int, CUdevice);
   CUresult (*cuCtxDestroy)(CUcontext);
   CUresult (*cuCtxPopCurrent)(CUcontext *);
   CUresult (*cuCtxPushCurrent)(CUcontext);
@@ -123,6 +127,14 @@ void futhark_context_config_set_gpu_free(struct futhark_context_config *cfg, voi
   cfg->gpu_free = ptr;
 }
 
+void futhark_context_config_set_gpu_back_alloc(struct futhark_context_config *cfg, void *ptr) {
+  cfg->gpu_back_alloc = ptr;
+}
+
+void futhark_context_config_set_gpu_back_free(struct futhark_context_config *cfg, void *ptr) {
+  cfg->gpu_back_free = ptr;
+}
+
 void futhark_context_config_set_cuGetErrorString(struct futhark_context_config *cfg, void *ptr) {
   cfg->cuGetErrorString = ptr;
 }
@@ -145,6 +157,14 @@ void futhark_context_config_set_cuDeviceGet(struct futhark_context_config *cfg, 
 
 void futhark_context_config_set_cuDeviceGetAttribute(struct futhark_context_config *cfg, void *ptr) {
   cfg->cuDeviceGetAttribute = ptr;
+}
+
+void futhark_context_config_set_cuDevicePrimaryCtxRetain(struct futhark_context_config *cfg, void *ptr) {
+  cfg->cuDevicePrimaryCtxRetain = ptr;
+}
+
+void futhark_context_config_set_cuDevicePrimaryCtxRelease(struct futhark_context_config *cfg, void *ptr) {
+  cfg->cuDevicePrimaryCtxRelease = ptr;
 }
 
 void futhark_context_config_set_cuCtxCreate(struct futhark_context_config *cfg, void *ptr) {
@@ -403,9 +423,9 @@ struct futhark_context {
   int profiling;
   int profiling_paused;
   int logging;
-  lock_t lock;
+  //lock_t lock;
+  //lock_t error_lock;
   char *error;
-  lock_t error_lock;
   FILE *log;
   struct constants *constants;
   struct free_list cu_free_list;
@@ -428,7 +448,6 @@ struct futhark_context {
   CUcontext cu_ctx;
   CUmodule module;
   CUstream stream;
-  //CUstream main;
 
   struct free_list free_list;
 
@@ -680,7 +699,7 @@ static void cuda_nvrtc_mk_build_options(struct futhark_context *ctx, const char 
   opts[i++] = msgprintf("-DMAX_THREADS_PER_BLOCK=%zu", ctx->max_block_size);
 
   // Time for the best lines of the code in the entire compiler.
-  if (getenv("CUDA_HOME") != NULL) {
+  /*if (getenv("CUDA_HOME") != NULL) {
     opts[i++] = msgprintf("-I%s/include", getenv("CUDA_HOME"));
   }
   if (getenv("CUDA_ROOT") != NULL) {
@@ -688,7 +707,7 @@ static void cuda_nvrtc_mk_build_options(struct futhark_context *ctx, const char 
   }
   if (getenv("CUDA_PATH") != NULL) {
     opts[i++] = msgprintf("-I%s/include", getenv("CUDA_PATH"));
-  }
+  }*/
   opts[i++] = msgprintf("-I/usr/local/cuda/include");
   opts[i++] = msgprintf("-I/usr/include");
 
@@ -937,12 +956,13 @@ static char* cuda_module_setup(struct futhark_context *ctx,
 
 static char* cuda_setup(struct futhark_context *ctx, const char *src_fragments[],
                         const char *extra_opts[], const char* cache_fname) {
-  CUDA_SUCCEED_FATAL((ctx->cfg->cuInit)(0));
+  //CUDA_SUCCEED_FATAL((ctx->cfg->cuInit)(0));
 
   if (cuda_device_setup(ctx) != 0) {
     futhark_panic(-1, "No suitable CUDA device found.\n");
   }
-  CUDA_SUCCEED_FATAL((ctx->cfg->cuCtxCreate)(&ctx->cu_ctx, 0, ctx->dev));
+  //CUDA_SUCCEED_FATAL((ctx->cfg->cuCtxCreate)(&ctx->cu_ctx, 0, ctx->dev));
+  CUDA_SUCCEED_FATAL((ctx->cfg->cuDevicePrimaryCtxRetain)(&ctx->cu_ctx, ctx->dev));
 
   free_list_init(&ctx->cu_free_list);
 
@@ -1120,38 +1140,45 @@ int futhark_context_may_fail(struct futhark_context* ctx) {
 }
 
 int futhark_context_sync(struct futhark_context* ctx) {
-  CUDA_SUCCEED_OR_RETURN((ctx->cfg->cuCtxPushCurrent)(ctx->cu_ctx));
-  CUDA_SUCCEED_OR_RETURN((ctx->cfg->cuCtxSynchronize)());
+  //CUDA_SUCCEED_OR_RETURN((ctx->cfg->cuCtxPushCurrent)(ctx->cu_ctx));
+  //CUDA_SUCCEED_OR_RETURN((ctx->cfg->cuCtxSynchronize)());
   if (ctx->failure_is_an_option) {
+    // FIXME FIXME: stream sync.
+
     // Check for any delayed error.
     int32_t failure_idx;
     CUDA_SUCCEED_OR_RETURN(
-                           (ctx->cfg->cuMemcpyDtoH)(&failure_idx,
+                           (ctx->cfg->cuMemcpyDtoHAsync)(&failure_idx,
                                         ctx->global_failure,
-                                        sizeof(int32_t)));
-    ctx->failure_is_an_option = 0;
+                                        sizeof(int32_t),
+                                        ctx->stream));
 
     if (failure_idx >= 0) {
       // We have to clear global_failure so that the next entry point
       // is not considered a failure from the start.
       int32_t no_failure = -1;
       CUDA_SUCCEED_OR_RETURN(
-                             (ctx->cfg->cuMemcpyHtoD)(ctx->global_failure,
+                             (ctx->cfg->cuMemcpyHtoDAsync)(ctx->global_failure,
                                           &no_failure,
-                                          sizeof(int32_t)));
+                                          sizeof(int32_t),
+                                          ctx->stream));
 
-      int64_t args[max_failure_args+1];
-      CUDA_SUCCEED_OR_RETURN(
-                             (ctx->cfg->cuMemcpyDtoH)(&args,
-                                          ctx->global_failure_args,
-                                          sizeof(args)));
-
-      ctx->error = get_failure_msg(failure_idx, args);
+      if (max_failure_args > 0) {
+        int64_t args[max_failure_args];
+        CUDA_SUCCEED_OR_RETURN(
+                               (ctx->cfg->cuMemcpyDtoHAsync)(&args,
+                                            ctx->global_failure_args,
+                                            sizeof(int64_t) * max_failure_args,
+                                            ctx->stream));
+        ctx->error = get_failure_msg(failure_idx, args);
+      } else {
+        ctx->error = get_failure_msg(failure_idx, NULL);
+      }
 
       return FUTHARK_PROGRAM_ERROR;
     }
   }
-  CUDA_SUCCEED_OR_RETURN((ctx->cfg->cuCtxPopCurrent)(&ctx->cu_ctx));
+  //CUDA_SUCCEED_OR_RETURN((ctx->cfg->cuCtxPopCurrent)(&ctx->cu_ctx));
   return 0;
 }
 
@@ -1175,21 +1202,30 @@ int backend_context_setup(struct futhark_context* ctx) {
 
   // FIXME FIXME: back alloc callback.
   int32_t no_error = -1;
-  CUDA_SUCCEED_FATAL((ctx->cfg->cuMemAlloc)(&ctx->global_failure, sizeof(no_error)));
+  CUDA_SUCCEED_FATAL((ctx->cfg->gpu_back_alloc)(&ctx->global_failure, sizeof(no_error)));
   CUDA_SUCCEED_FATAL((ctx->cfg->cuMemcpyHtoD)(ctx->global_failure, &no_error, sizeof(no_error)));
-  // The +1 is to avoid zero-byte allocations.
-  CUDA_SUCCEED_FATAL((ctx->cfg->cuMemAlloc)(&ctx->global_failure_args, sizeof(int64_t)*(max_failure_args+1)));
+  if (max_failure_args > 0) {
+    CUDA_SUCCEED_FATAL((ctx->cfg->cuMemAlloc)(&ctx->global_failure_args, sizeof(int64_t) * max_failure_args));
+  } else {
+    ctx->global_failure_args = 0UL;
+  }
   return 0;
 }
 
 void backend_context_teardown(struct futhark_context* ctx) {
-  (ctx->cfg->cuMemFree)(ctx->global_failure);
-  (ctx->cfg->cuMemFree)(ctx->global_failure_args);
+  if (ctx->global_failure_args != 0UL) {
+    (ctx->cfg->cuMemFree)(ctx->global_failure_args);
+  }
+  (ctx->cfg->gpu_back_free)(ctx->global_failure);
   CUDA_SUCCEED_FATAL(cuda_free_all(ctx));
   (void)cuda_tally_profiling_records(ctx);
   free(ctx->profiling_records);
   CUDA_SUCCEED_FATAL((ctx->cfg->cuModuleUnload)(ctx->module));
-  CUDA_SUCCEED_FATAL((ctx->cfg->cuCtxDestroy)(ctx->cu_ctx));
+  //CUDA_SUCCEED_FATAL((ctx->cfg->cuCtxDestroy)(ctx->cu_ctx));
+  CUDA_SUCCEED_FATAL((ctx->cfg->cuDevicePrimaryCtxRelease)(ctx->dev));
+}
+
+void backend_context_reset(struct futhark_context* ctx) {
 }
 
 // End of backends/cuda.h.
