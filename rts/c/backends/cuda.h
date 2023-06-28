@@ -91,6 +91,7 @@ struct futhark_context_config {
   CUresult (*cuMemcpyAsync)(CUdeviceptr, CUdeviceptr, size_t, CUstream);
   CUresult (*cuMemcpyHtoDAsync)(CUdeviceptr, const void *, size_t, CUstream);
   CUresult (*cuMemcpyDtoHAsync)(void *, CUdeviceptr, size_t, CUstream);
+  CUresult (*cuStreamSynchronize)(CUstream);
   cudaError_t (*cudaEventCreate)(cudaEvent_t *);
   cudaError_t (*cudaEventDestroy)(cudaEvent_t);
   cudaError_t (*cudaEventRecord)(cudaEvent_t, cudaStream_t);
@@ -217,6 +218,10 @@ void futhark_context_config_set_cuMemcpyHtoDAsync(struct futhark_context_config 
 
 void futhark_context_config_set_cuMemcpyDtoHAsync(struct futhark_context_config *cfg, void *ptr) {
   cfg->cuMemcpyDtoHAsync = ptr;
+}
+
+void futhark_context_config_set_cuStreamSynchronize(struct futhark_context_config *cfg, void *ptr) {
+  cfg->cuStreamSynchronize = ptr;
 }
 
 void futhark_context_config_set_cudaEventCreate(struct futhark_context_config *cfg, void *ptr) {
@@ -1147,29 +1152,29 @@ int futhark_context_sync(struct futhark_context* ctx) {
 
     // Check for any delayed error.
     int32_t failure_idx;
-    CUDA_SUCCEED_OR_RETURN(
-                           (ctx->cfg->cuMemcpyDtoHAsync)(&failure_idx,
-                                        ctx->global_failure,
-                                        sizeof(int32_t),
-                                        ctx->stream));
+    CUDA_SUCCEED_OR_RETURN((ctx->cfg->cuMemcpyDtoHAsync)(&failure_idx,
+                                ctx->global_failure,
+                                sizeof(int32_t),
+                                ctx->stream));
+    CUDA_SUCCEED_OR_RETURN((ctx->cfg->cuStreamSynchronize)(ctx->stream));
 
     if (failure_idx >= 0) {
       // We have to clear global_failure so that the next entry point
       // is not considered a failure from the start.
       int32_t no_failure = -1;
-      CUDA_SUCCEED_OR_RETURN(
-                             (ctx->cfg->cuMemcpyHtoDAsync)(ctx->global_failure,
-                                          &no_failure,
-                                          sizeof(int32_t),
-                                          ctx->stream));
+      CUDA_SUCCEED_OR_RETURN((ctx->cfg->cuMemcpyHtoDAsync)(ctx->global_failure,
+                                  &no_failure,
+                                  sizeof(int32_t),
+                                  ctx->stream));
+      CUDA_SUCCEED_OR_RETURN((ctx->cfg->cuStreamSynchronize)(ctx->stream));
 
       if (max_failure_args > 0) {
         int64_t args[max_failure_args];
-        CUDA_SUCCEED_OR_RETURN(
-                               (ctx->cfg->cuMemcpyDtoHAsync)(&args,
-                                            ctx->global_failure_args,
-                                            sizeof(int64_t) * max_failure_args,
-                                            ctx->stream));
+        CUDA_SUCCEED_OR_RETURN((ctx->cfg->cuMemcpyDtoHAsync)(&args,
+                                    ctx->global_failure_args,
+                                    sizeof(int64_t) * max_failure_args,
+                                    ctx->stream));
+        CUDA_SUCCEED_OR_RETURN((ctx->cfg->cuStreamSynchronize)(ctx->stream));
         ctx->error = get_failure_msg(failure_idx, args);
       } else {
         ctx->error = get_failure_msg(failure_idx, NULL);
