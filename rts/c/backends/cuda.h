@@ -67,8 +67,8 @@ struct futhark_context_config {
 
   CUresult (*gpu_alloc)(CUdeviceptr *, size_t);
   CUresult (*gpu_free)(CUdeviceptr);
-  CUresult (*gpu_back_alloc)(CUdeviceptr *, size_t);
-  CUresult (*gpu_back_free)(CUdeviceptr);
+  CUresult (*gpu_global_failure_alloc)(CUdeviceptr *, size_t);
+  CUresult (*gpu_global_failure_free)(CUdeviceptr);
 
   CUresult (*cuGetErrorString)(int, const char **);
   CUresult (*cuInit)(unsigned int);
@@ -128,12 +128,12 @@ void futhark_context_config_set_gpu_free(struct futhark_context_config *cfg, voi
   cfg->gpu_free = ptr;
 }
 
-void futhark_context_config_set_gpu_back_alloc(struct futhark_context_config *cfg, void *ptr) {
-  cfg->gpu_back_alloc = ptr;
+void futhark_context_config_set_gpu_global_failure_alloc(struct futhark_context_config *cfg, void *ptr) {
+  cfg->gpu_global_failure_alloc = ptr;
 }
 
-void futhark_context_config_set_gpu_back_free(struct futhark_context_config *cfg, void *ptr) {
-  cfg->gpu_back_free = ptr;
+void futhark_context_config_set_gpu_global_failure_free(struct futhark_context_config *cfg, void *ptr) {
+  cfg->gpu_global_failure_free = ptr;
 }
 
 void futhark_context_config_set_cuGetErrorString(struct futhark_context_config *cfg, void *ptr) {
@@ -1041,10 +1041,12 @@ static CUresult cuda_alloc(struct futhark_context *ctx, FILE *log,
   }
 
   if (free_list_find(&ctx->cu_free_list, min_size, tag, size_out, (fl_mem*)mem_out) == 0) {
+    printf("TRACE: rts: cuda_alloc: found free block: min_size=%lu size=%lu\n", min_size, *size_out);
     if (*size_out >= min_size) {
       if (ctx->cfg->debugging) {
         fprintf(log, "No need to allocate: Found a block in the free list.\n");
       }
+      printf("TRACE: rts: cuda_alloc:   return free block\n");
       return CUDA_SUCCESS;
     } else {
       if (ctx->cfg->debugging) {
@@ -1077,18 +1079,21 @@ static CUresult cuda_alloc(struct futhark_context *ctx, FILE *log,
     }
     res = (ctx->cfg->gpu_alloc)(mem_out, min_size);
   }
+  printf("TRACE: rts: cuda_alloc: alloc fresh block: dptr=0x%016lx size=%lu\n", (*mem_out), min_size);
 
   return res;
 }
 
 static CUresult cuda_free(struct futhark_context *ctx,
                           CUdeviceptr mem, size_t size, const char *tag) {
+  printf("TRACE: rts: cuda_free: dptr=0x%016lx size=%lu\n", mem, size);
   free_list_insert(&ctx->cu_free_list, size, (fl_mem)mem, tag);
   return CUDA_SUCCESS;
 }
 
 static CUresult cuda_free_all(struct futhark_context *ctx) {
   CUdeviceptr mem;
+  printf("TRACE: rts: cuda_free_all\n");
   free_list_pack(&ctx->cu_free_list);
   while (free_list_first(&ctx->cu_free_list, (fl_mem*)&mem) == 0) {
     CUresult res = (ctx->cfg->gpu_free)(mem);
@@ -1148,10 +1153,8 @@ int futhark_context_sync(struct futhark_context* ctx) {
   //CUDA_SUCCEED_OR_RETURN((ctx->cfg->cuCtxPushCurrent)(ctx->cu_ctx));
   //CUDA_SUCCEED_OR_RETURN((ctx->cfg->cuCtxSynchronize)());
   if (ctx->failure_is_an_option) {
-    // FIXME FIXME: stream sync.
-
     // Check for any delayed error.
-    int32_t failure_idx;
+    int32_t failure_idx = -1;
     CUDA_SUCCEED_OR_RETURN((ctx->cfg->cuMemcpyDtoHAsync)(&failure_idx,
                                 ctx->global_failure,
                                 sizeof(int32_t),
@@ -1205,12 +1208,11 @@ int backend_context_setup(struct futhark_context* ctx) {
     futhark_panic(1, "%s\n", ctx->error);
   }
 
-  // FIXME FIXME: back alloc callback.
   int32_t no_error = -1;
-  CUDA_SUCCEED_FATAL((ctx->cfg->gpu_back_alloc)(&ctx->global_failure, sizeof(no_error)));
+  CUDA_SUCCEED_FATAL((ctx->cfg->gpu_global_failure_alloc)(&ctx->global_failure, sizeof(int64_t) * (max_failure_args + 1)));
   CUDA_SUCCEED_FATAL((ctx->cfg->cuMemcpyHtoD)(ctx->global_failure, &no_error, sizeof(no_error)));
   if (max_failure_args > 0) {
-    CUDA_SUCCEED_FATAL((ctx->cfg->cuMemAlloc)(&ctx->global_failure_args, sizeof(int64_t) * max_failure_args));
+    ctx->global_failure_args = ctx->global_failure + 8UL;
   } else {
     ctx->global_failure_args = 0UL;
   }
@@ -1218,10 +1220,7 @@ int backend_context_setup(struct futhark_context* ctx) {
 }
 
 void backend_context_teardown(struct futhark_context* ctx) {
-  if (ctx->global_failure_args != 0UL) {
-    (ctx->cfg->cuMemFree)(ctx->global_failure_args);
-  }
-  (ctx->cfg->gpu_back_free)(ctx->global_failure);
+  (ctx->cfg->gpu_global_failure_free)(ctx->global_failure);
   CUDA_SUCCEED_FATAL(cuda_free_all(ctx));
   (void)cuda_tally_profiling_records(ctx);
   free(ctx->profiling_records);

@@ -139,6 +139,7 @@ defineMemorySpace space = do
   let unrefdef =
         [C.cedecl|int $id:(fatMemUnRef space) ($ty:ctx_ty *ctx, $ty:mty *block, const char *desc) {
   if (block->references != NULL) {
+    printf("TRACE: rts: memblock_unref: refc=%d mem=0x%016lx size=%lu\n", *(block->references), block->mem, block->size);
     *(block->references) -= 1;
     if (ctx->detail_memory) {
       fprintf(ctx->log, "Unreferencing block %s (allocated as %s) in %s: %d references remaining.\n",
@@ -153,6 +154,8 @@ defineMemorySpace space = do
       }
     }
     block->references = NULL;
+  } else {
+    printf("TRACE: rts: memblock_unref: refc=(null)\n");
   }
   return 0;
 }|]
@@ -163,6 +166,7 @@ defineMemorySpace space = do
       allocRawMem [C.cexp|block->mem|] [C.cexp|size|] space [C.cexp|desc|]
   let allocdef =
         [C.cedecl|int $id:(fatMemAlloc space) ($ty:ctx_ty *ctx, $ty:mty *block, typename int64_t size, const char *desc) {
+  printf("TRACE: rts: memblock_alloc: req size=%lu\n", size);
   if (size < 0) {
     futhark_panic(1, "Negative allocation of %lld bytes attempted for %s in %s.\n",
           (long long)size, desc, $string:spacedesc, ctx->$id:usagename);
@@ -197,6 +201,7 @@ defineMemorySpace space = do
     *(block->references) = 1;
     block->size = (size_t)size;
     block->desc = desc;
+    printf("TRACE: rts: memblock_alloc:   success: refc=%d mem=0x%016lx size=%lu\n", *(block->references), block->mem, block->size);
     return FUTHARK_SUCCESS;
   } else {
     // We are naively assuming that any memory allocation error is due to OOM.
@@ -213,6 +218,7 @@ defineMemorySpace space = do
                            old_error);
     free(old_error);
     //lock_unlock(&ctx->error_lock);
+    printf("TRACE: rts: memblock_alloc:   oom\n");
     return FUTHARK_OUT_OF_MEMORY;
   }
   }|]
@@ -221,6 +227,7 @@ defineMemorySpace space = do
   -- count of the source by one.
   let setdef =
         [C.cedecl|int $id:(fatMemSet space) ($ty:ctx_ty *ctx, $ty:mty *lhs, $ty:mty *rhs, const char *lhs_desc) {
+  printf("TRACE: rts: memblock_set: ...\n");
   int ret = $id:(fatMemUnRef space)(ctx, lhs, lhs_desc);
   if (rhs->references != NULL) {
     (*(rhs->references))++;
