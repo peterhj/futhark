@@ -68,6 +68,7 @@ compileProg version prog = do
           GC.opsReadScalar = readCUDAScalar,
           GC.opsAllocate = allocateCUDABuffer,
           GC.opsDeallocate = deallocateCUDABuffer,
+          GC.opsUnify = unifyCUDABuffer,
           GC.opsCopy = copyCUDAMemory,
           GC.opsMemoryType = cudaMemoryType,
           GC.opsCompiler = callKernel,
@@ -210,6 +211,14 @@ deallocateCUDABuffer mem size tag "device" =
   GC.stm [C.cstm|CUDA_SUCCEED_OR_RETURN(cuda_free(ctx, $exp:mem, $exp:size, $exp:tag));|]
 deallocateCUDABuffer _ _ _ space =
   error $ "Cannot deallocate in '" ++ space ++ "' memory space."
+
+unifyCUDABuffer :: GC.Unify OpenCL ()
+unifyCUDABuffer lhs_tag rhs_tag "device" =
+  GC.stm
+    [C.cstm|ctx->error =
+     CUDA_SUCCEED_NONFATAL(cuda_unify(ctx, ctx->log, $exp:lhs_tag, $exp:rhs_tag));|]
+unifyCUDABuffer _ _ space =
+  error $ "Cannot unify in '" ++ space ++ "' memory space."
 
 copyCUDAMemory :: GC.Copy OpenCL ()
 copyCUDAMemory b dstmem dstidx dstSpace srcmem srcidx srcSpace nbytes = do

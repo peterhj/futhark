@@ -71,6 +71,7 @@ defaultOperations =
       opsReadScalar = defReadScalar,
       opsAllocate = defAllocate,
       opsDeallocate = defDeallocate,
+      opsUnify = defUnify,
       opsCopy = defCopy,
       opsMemoryType = defMemoryType,
       opsCompiler = defCompiler,
@@ -88,6 +89,8 @@ defaultOperations =
       error "Cannot allocate in non-default memory space"
     defDeallocate _ _ =
       error "Cannot deallocate in non-default memory space"
+    defUnify _ _ =
+      error "Cannot unify in non-default memory space"
     defCopy _ destmem destoffset DefaultSpace srcmem srcoffset DefaultSpace size =
       copyMemoryDefaultSpace destmem destoffset srcmem srcoffset size
     defCopy _ _ _ _ _ _ _ _ =
@@ -225,9 +228,11 @@ defineMemorySpace space = do
 
   -- Memory setting - unreference the destination and increase the
   -- count of the source by one.
+  unify <- collect $ unifyRawMem [C.cexp|lhs->desc|] [C.cexp|rhs->desc|] space
   let setdef =
         [C.cedecl|int $id:(fatMemSet space) ($ty:ctx_ty *ctx, $ty:mty *lhs, $ty:mty *rhs, const char *lhs_desc) {
   printf("TRACE: rts: memblock_set: ...\n");
+  $items:unify
   int ret = $id:(fatMemUnRef space)(ctx, lhs, lhs_desc);
   if (rhs->references != NULL) {
     (*(rhs->references))++;

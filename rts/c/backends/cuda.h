@@ -67,6 +67,7 @@ struct futhark_context_config {
 
   CUresult (*gpu_alloc)(CUdeviceptr *, size_t, const char *);
   CUresult (*gpu_free)(CUdeviceptr);
+  CUresult (*gpu_unify)(const char *, const char *);
   CUresult (*gpu_global_failure_alloc)(CUdeviceptr *, size_t);
   CUresult (*gpu_global_failure_free)(CUdeviceptr);
 
@@ -126,6 +127,10 @@ void futhark_context_config_set_gpu_alloc(struct futhark_context_config *cfg, vo
 
 void futhark_context_config_set_gpu_free(struct futhark_context_config *cfg, void *ptr) {
   cfg->gpu_free = ptr;
+}
+
+void futhark_context_config_set_gpu_unify(struct futhark_context_config *cfg, void *ptr) {
+  cfg->gpu_unify = ptr;
 }
 
 void futhark_context_config_set_gpu_global_failure_alloc(struct futhark_context_config *cfg, void *ptr) {
@@ -1033,6 +1038,12 @@ static cudaEvent_t* cuda_get_events(struct futhark_context *ctx, int *runs, int6
   return events;
 }
 
+static CUresult cuda_unify(struct futhark_context *ctx, FILE *log,
+                           const char *lhs_tag, const char *rhs_tag) {
+  (ctx->cfg->gpu_unify)(lhs_tag, rhs_tag);
+  return CUDA_SUCCESS;
+}
+
 static CUresult cuda_alloc(struct futhark_context *ctx, FILE *log,
                            size_t min_size, const char *tag,
                            CUdeviceptr *mem_out, size_t *size_out) {
@@ -1040,12 +1051,14 @@ static CUresult cuda_alloc(struct futhark_context *ctx, FILE *log,
     min_size = sizeof(int);
   }
 
-  if (free_list_find(&ctx->cu_free_list, min_size, tag, size_out, (fl_mem*)mem_out) == 0) {
+  const char *tag_out = NULL;
+  if (free_list_find(&ctx->cu_free_list, min_size, tag, size_out, (fl_mem*)mem_out, &tag_out) == 0) {
     printf("TRACE: rts: cuda_alloc: found free block: min_size=%lu size=%lu\n", min_size, *size_out);
     if (*size_out >= min_size) {
       if (ctx->cfg->debugging) {
         fprintf(log, "No need to allocate: Found a block in the free list.\n");
       }
+      cuda_unify(ctx, log, tag_out, tag);
       printf("TRACE: rts: cuda_alloc:   return free block\n");
       return CUDA_SUCCESS;
     } else {

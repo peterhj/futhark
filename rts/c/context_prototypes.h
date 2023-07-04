@@ -19,6 +19,7 @@ static void teardown_program(struct futhark_context *ctx);
 static void host_alloc(struct futhark_context* ctx, size_t size, const char* tag, size_t* size_out, void** mem_out);
 // Allocate memory allocated with host_alloc().
 static void host_free(struct futhark_context* ctx, size_t size, const char* tag, void* mem);
+static void host_unify(struct futhark_context* ctx, const char *lhs_tag, const char *rhs_tag);
 
 // Functions that must be defined by the backend.
 static void backend_context_config_setup(struct futhark_context_config* cfg);

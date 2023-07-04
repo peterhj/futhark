@@ -140,7 +140,7 @@ static int free_list_acceptable(size_t size, const char *tag, const struct free_
 // does not exist, another memory block with exactly the desired size.
 // Returns 0 on success.
 static int free_list_find(struct free_list *l, size_t size, const char *tag,
-                          size_t *size_out, fl_mem *mem_out) {
+                          size_t *size_out, fl_mem *mem_out, char const **tag_out) {
   //lock_lock(&l->lock);
   int size_match = -1;
   int i;
@@ -158,6 +158,7 @@ static int free_list_find(struct free_list *l, size_t size, const char *tag,
     l->entries[size_match].valid = 0;
     *size_out = l->entries[size_match].size;
     *mem_out = l->entries[size_match].mem;
+    *tag_out = l->entries[size_match].tag;
     l->used--;
     ret = 0;
   }
