@@ -1222,6 +1222,7 @@ int backend_context_setup(struct futhark_context* ctx) {
 void backend_context_teardown(struct futhark_context* ctx) {
   (ctx->cfg->gpu_global_failure_free)(ctx->global_failure);
   CUDA_SUCCEED_FATAL(cuda_free_all(ctx));
+  free_list_destroy(&ctx->cu_free_list);
   (void)cuda_tally_profiling_records(ctx);
   free(ctx->profiling_records);
   CUDA_SUCCEED_FATAL((ctx->cfg->cuModuleUnload)(ctx->module));
@@ -1230,6 +1231,11 @@ void backend_context_teardown(struct futhark_context* ctx) {
 }
 
 void backend_context_reset(struct futhark_context* ctx) {
+  printf("rts: cuda: backend_context_reset: ...\n");
+  CUDA_SUCCEED_FATAL(cuda_free_all(ctx));
+  free_list_destroy(&ctx->cu_free_list);
+  free_list_init(&ctx->cu_free_list);
+  printf("rts: cuda: backend_context_reset: done\n");
 }
 
 // End of backends/cuda.h.
