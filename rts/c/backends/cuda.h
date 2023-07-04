@@ -65,7 +65,7 @@ struct futhark_context_config {
   int default_grid_size_changed;
   int default_tile_size_changed;
 
-  CUresult (*gpu_alloc)(CUdeviceptr *, size_t);
+  CUresult (*gpu_alloc)(CUdeviceptr *, size_t, const char *);
   CUresult (*gpu_free)(CUdeviceptr);
   CUresult (*gpu_global_failure_alloc)(CUdeviceptr *, size_t);
   CUresult (*gpu_global_failure_free)(CUdeviceptr);
@@ -1066,7 +1066,7 @@ static CUresult cuda_alloc(struct futhark_context *ctx, FILE *log,
     fprintf(log, "Actually allocating the desired block.\n");
   }
 
-  CUresult res = (ctx->cfg->gpu_alloc)(mem_out, min_size);
+  CUresult res = (ctx->cfg->gpu_alloc)(mem_out, min_size, tag);
   while (res == CUDA_ERROR_OUT_OF_MEMORY) {
     CUdeviceptr mem;
     if (free_list_first(&ctx->cu_free_list, (fl_mem*)&mem) == 0) {
@@ -1077,7 +1077,7 @@ static CUresult cuda_alloc(struct futhark_context *ctx, FILE *log,
     } else {
       break;
     }
-    res = (ctx->cfg->gpu_alloc)(mem_out, min_size);
+    res = (ctx->cfg->gpu_alloc)(mem_out, min_size, tag);
   }
   printf("TRACE: rts: cuda_alloc: alloc fresh block: dptr=0x%016lx size=%lu\n", (*mem_out), min_size);
 
