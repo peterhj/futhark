@@ -50,13 +50,18 @@ static int is_small_alloc(size_t size) {
   return size < 1024*1024;
 }
 
+static void host_unify(struct futhark_context* ctx,
+                       const char *lhs_tag, const char *rhs_tag) {
+  // FIXME
+}
+
 static void host_alloc(struct futhark_context* ctx,
                        size_t size, const char* tag, size_t* size_out, void** mem_out) {
   const char *tag_out = NULL;
   if (is_small_alloc(size) || free_list_find(&ctx->free_list, size, tag, size_out, (fl_mem*)mem_out, &tag_out) != 0) {
     *size_out = size;
     *mem_out = malloc(size);
-    host_unify(ctx, tag_out, tag);
+    host_unify(ctx, tag, tag_out);
   }
 }
 
@@ -72,11 +77,6 @@ static void host_free(struct futhark_context* ctx,
   } else {
     free_list_insert(&ctx->free_list, size, (fl_mem)mem, tag);
   }
-}
-
-static void host_unify(struct futhark_context* ctx,
-                       const char *lhs_tag, const char *rhs_tag) {
-  // FIXME
 }
 
 struct futhark_context_config* futhark_context_config_new(void) {

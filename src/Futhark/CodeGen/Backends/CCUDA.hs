@@ -200,7 +200,7 @@ allocateCUDABuffer :: GC.Allocate OpenCL ()
 allocateCUDABuffer mem size tag "device" =
   GC.stm
     [C.cstm|ctx->error =
-     CUDA_SUCCEED_NONFATAL(cuda_alloc(ctx, ctx->log,
+     CUDA_SUCCEED_NONFATAL(cuda_alloc(ctx,
                                       (size_t)$exp:size, $exp:tag,
                                       &$exp:mem, &out_size));|]
 allocateCUDABuffer _ _ _ space =
@@ -215,8 +215,7 @@ deallocateCUDABuffer _ _ _ space =
 unifyCUDABuffer :: GC.Unify OpenCL ()
 unifyCUDABuffer lhs_tag rhs_tag "device" =
   GC.stm
-    [C.cstm|ctx->error =
-     CUDA_SUCCEED_NONFATAL(cuda_unify(ctx, ctx->log, $exp:lhs_tag, $exp:rhs_tag));|]
+    [C.cstm|cuda_unify(ctx, $exp:lhs_tag, $exp:rhs_tag);|]
 unifyCUDABuffer _ _ space =
   error $ "Cannot unify in '" ++ space ++ "' memory space."
 
