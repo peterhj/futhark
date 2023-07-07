@@ -233,11 +233,11 @@ copyCUDAMemory b dstmem dstidx dstSpace srcmem srcidx srcSpace nbytes = do
     memcpyFun GC.CopyBarrier (Space "device") DefaultSpace =
       ([C.cexp|(ctx->cfg->cuMemcpyHtoD)($exp:dst, $exp:src, $exp:nbytes)|], copyHostToDev)
     memcpyFun _ (Space "device") (Space "device") =
-      ([C.cexp|(ctx->cfg->cuMemcpy)($exp:dst, $exp:src, $exp:nbytes)|], copyDevToDev)
+      ([C.cexp|(ctx->cfg->cuMemcpyAsync)($exp:dst, $exp:src, $exp:nbytes, ctx->stream)|], copyDevToDev)
     memcpyFun GC.CopyNoBarrier DefaultSpace (Space "device") =
-      ([C.cexp|(ctx->cfg->cuMemcpyDtoHAsync)($exp:dst, $exp:src, $exp:nbytes, 0)|], copyDevToHost)
+      ([C.cexp|(ctx->cfg->cuMemcpyDtoHAsync)($exp:dst, $exp:src, $exp:nbytes, ctx->stream)|], copyDevToHost)
     memcpyFun GC.CopyNoBarrier (Space "device") DefaultSpace =
-      ([C.cexp|(ctx->cfg->cuMemcpyHtoDAsync)($exp:dst, $exp:src, $exp:nbytes, 0)|], copyHostToDev)
+      ([C.cexp|(ctx->cfg->cuMemcpyHtoDAsync)($exp:dst, $exp:src, $exp:nbytes, ctx->stream)|], copyHostToDev)
     memcpyFun _ _ _ =
       error $
         "Cannot copy to '"
@@ -353,7 +353,7 @@ callKernel (LaunchKernel safety kernel_name args num_blocks block_size) = do
         (ctx->cfg->cuLaunchKernel)(ctx->program->$id:kernel_name,
                        grid[0], grid[1], grid[2],
                        $exp:block_x, $exp:block_y, $exp:block_z,
-                       $exp:shared_tot, NULL,
+                       $exp:shared_tot, ctx->stream,
                        $id:args_arr, NULL));
       $items:aft
       if (ctx->debugging) {

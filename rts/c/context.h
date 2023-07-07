@@ -174,11 +174,18 @@ void futhark_context_free(struct futhark_context* ctx) {
 
 void futhark_context_reset(struct futhark_context* ctx) {
   printf("rts: futhark_context_reset: ...\n");
-  free_all_in_free_list(ctx);
-  free_list_destroy(&ctx->free_list);
-  free_list_init(&ctx->free_list);
-  backend_context_reset(ctx);
+  free_constants(ctx);
+  init_constants(ctx);
   printf("rts: futhark_context_reset: done\n");
+}
+
+void futhark_context_release(struct futhark_context* ctx) {
+  printf("rts: futhark_context_release: ...\n");
+  free_all_in_free_list(ctx);
+  //free_list_destroy(&ctx->free_list);
+  //free_list_init(&ctx->free_list);
+  backend_context_release(ctx);
+  printf("rts: futhark_context_release: done\n");
 }
 
 // End of context.h

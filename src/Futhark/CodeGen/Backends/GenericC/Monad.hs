@@ -182,6 +182,7 @@ type Allocate op s =
 -- given size,, which is in the given memory space.
 type Deallocate op s = C.Exp -> C.Exp -> C.Exp -> SpaceId -> CompilerM op s ()
 
+-- | Unify the two given tags, which are in the given memory space.
 type Unify op s = C.Exp -> C.Exp -> SpaceId -> CompilerM op s ()
 
 -- | Whether a copying operation should implicitly function as a

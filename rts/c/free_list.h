@@ -114,18 +114,18 @@ static int free_list_acceptable(size_t size, const char *tag, const struct free_
   // We know the block fits.  Now the question is whether it is too
   // big.  Our policy is as follows:
   //
-  // 1) We don't care about wasted space below 128 bytes (to avoid
-  // churn in tiny allocations).
+  // 1) If the tag matches, we allow _any_ amount of wasted space.
   //
-  // 2) If the tag matches, we allow _any_ amount of wasted space.
+  // 2) We don't care about wasted space below 128 bytes (to avoid
+  // churn in tiny allocations).
   //
   // 3) Otherwise we allow up to 50% wasted space.
 
-  if (entry->size <= 128) {
+  /*if (entry->tag != NULL && tag != NULL && (entry->tag == tag || free_list_tag_cmp(entry->tag, tag) == 0)) {
     return 1;
-  }
+  }*/
 
-  if (entry->tag != NULL && tag != NULL && (entry->tag == tag || strcmp(entry->tag, tag) == 0)) {
+  if (entry->size <= 128) {
     return 1;
   }
 

@@ -65,6 +65,8 @@ struct futhark_context_config {
   int default_grid_size_changed;
   int default_tile_size_changed;
 
+  CUstream setup_stream;
+
   CUresult (*gpu_alloc)(CUdeviceptr *, size_t, const char *);
   CUresult (*gpu_free)(CUdeviceptr);
   void (*gpu_unify)(const char *, const char *);
@@ -120,6 +122,10 @@ struct futhark_context_config {
                              void **,
                              void **);
 };
+
+void futhark_context_config_set_setup_stream(struct futhark_context_config *cfg, void *ptr) {
+  cfg->setup_stream = ptr;
+}
 
 void futhark_context_config_set_gpu_alloc(struct futhark_context_config *cfg, void *ptr) {
   cfg->gpu_alloc = ptr;
@@ -1117,6 +1123,10 @@ static CUresult cuda_free_all(struct futhark_context *ctx) {
   return CUDA_SUCCESS;
 }
 
+const char *const *futhark_context_get_cuda_program(struct futhark_context* ctx) {
+  return cuda_program;
+}
+
 void futhark_context_set_max_block_size(struct futhark_context* ctx, size_t val) {
   ctx->max_block_size = val;
 }
@@ -1203,6 +1213,8 @@ int futhark_context_sync(struct futhark_context* ctx) {
 }
 
 int backend_context_setup(struct futhark_context* ctx) {
+  ctx->stream = ctx->cfg->setup_stream;
+
   ctx->profiling_records_capacity = 200;
   ctx->profiling_records_used = 0;
   ctx->profiling_records =
@@ -1242,12 +1254,12 @@ void backend_context_teardown(struct futhark_context* ctx) {
   CUDA_SUCCEED_FATAL((ctx->cfg->cuDevicePrimaryCtxRelease)(ctx->dev));
 }
 
-void backend_context_reset(struct futhark_context* ctx) {
-  printf("rts: cuda: backend_context_reset: ...\n");
+void backend_context_release(struct futhark_context* ctx) {
+  printf("rts: cuda: backend_context_release: ...\n");
   CUDA_SUCCEED_FATAL(cuda_free_all(ctx));
-  free_list_destroy(&ctx->cu_free_list);
-  free_list_init(&ctx->cu_free_list);
-  printf("rts: cuda: backend_context_reset: done\n");
+  //free_list_destroy(&ctx->cu_free_list);
+  //free_list_init(&ctx->cu_free_list);
+  printf("rts: cuda: backend_context_release: done\n");
 }
 
 // End of backends/cuda.h.
