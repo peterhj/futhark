@@ -116,7 +116,7 @@ static int free_list_acceptable(size_t size, const char *tag, const struct free_
   //
   // 1) If the tag matches, we allow _any_ amount of wasted space.
   //
-  // 2) We don't care about wasted space below 128 bytes (to avoid
+  // 2) We don't care about wasted space below 256 bytes (to avoid
   // churn in tiny allocations).
   //
   // 3) Otherwise we allow up to 50% wasted space.
@@ -125,7 +125,7 @@ static int free_list_acceptable(size_t size, const char *tag, const struct free_
     return 1;
   }*/
 
-  if (entry->size <= 128) {
+  if (entry->size <= 256) {
     return 1;
   }
 

@@ -65,6 +65,7 @@ struct futhark_context_config {
   int default_grid_size_changed;
   int default_tile_size_changed;
 
+  CUdevice setup_dev;
   CUstream setup_stream;
 
   CUresult (*gpu_alloc)(CUdeviceptr *, size_t, const char *);
@@ -122,6 +123,10 @@ struct futhark_context_config {
                              void **,
                              void **);
 };
+
+void futhark_context_config_set_setup_device(struct futhark_context_config *cfg, int dev) {
+  cfg->setup_dev = dev;
+}
 
 void futhark_context_config_set_setup_stream(struct futhark_context_config *cfg, void *ptr) {
   cfg->setup_stream = ptr;
@@ -449,6 +454,9 @@ struct futhark_context {
   int64_t cur_mem_usage_default;
   // Uniform above
 
+  CUdevice dev;
+  CUstream stream;
+
   CUdeviceptr global_failure;
   CUdeviceptr global_failure_args;
   struct tuning_params tuning_params;
@@ -460,10 +468,8 @@ struct futhark_context {
   int64_t cur_mem_usage_device;
   struct program* program;
 
-  CUdevice dev;
   CUcontext cu_ctx;
   CUmodule module;
-  CUstream stream;
 
   struct free_list free_list;
 
@@ -1213,6 +1219,7 @@ int futhark_context_sync(struct futhark_context* ctx) {
 }
 
 int backend_context_setup(struct futhark_context* ctx) {
+  ctx->dev = ctx->cfg->setup_dev;
   ctx->stream = ctx->cfg->setup_stream;
 
   ctx->profiling_records_capacity = 200;
