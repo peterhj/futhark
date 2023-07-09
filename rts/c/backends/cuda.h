@@ -1197,7 +1197,6 @@ int futhark_context_sync(struct futhark_context* ctx) {
                                   &no_failure,
                                   sizeof(int32_t),
                                   ctx->stream));
-      CUDA_SUCCEED_OR_RETURN((ctx->cfg->cuStreamSynchronize)(ctx->stream));
 
       if (max_failure_args > 0) {
         int64_t args[max_failure_args];
@@ -1208,6 +1207,7 @@ int futhark_context_sync(struct futhark_context* ctx) {
         CUDA_SUCCEED_OR_RETURN((ctx->cfg->cuStreamSynchronize)(ctx->stream));
         ctx->error = get_failure_msg(failure_idx, args);
       } else {
+        CUDA_SUCCEED_OR_RETURN((ctx->cfg->cuStreamSynchronize)(ctx->stream));
         ctx->error = get_failure_msg(failure_idx, NULL);
       }
 
@@ -1216,6 +1216,10 @@ int futhark_context_sync(struct futhark_context* ctx) {
   }
   //CUDA_SUCCEED_OR_RETURN((ctx->cfg->cuCtxPopCurrent)(&ctx->cu_ctx));
   return 0;
+}
+
+const char *futhark_context_error(struct futhark_context* ctx) {
+  return ctx->error;
 }
 
 int backend_context_setup(struct futhark_context* ctx) {

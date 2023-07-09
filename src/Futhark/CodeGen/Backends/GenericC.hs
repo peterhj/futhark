@@ -181,10 +181,9 @@ defineMemorySpace space = do
   }
 
   if (ctx->detail_memory) {
-    fprintf(ctx->log, "Allocating %lld bytes for %s in %s (then allocated: %lld bytes).",
+    fprintf(ctx->log, "Allocating %lld bytes for %s in %s.",
             (long long) size,
-            desc, $string:spacedesc,
-            new_usage);
+            desc, $string:spacedesc);
   }
 
   size_t out_size = 0;
