@@ -169,7 +169,7 @@ defineMemorySpace space = do
       allocRawMem [C.cexp|block->mem|] [C.cexp|size|] space [C.cexp|desc|]
   let allocdef =
         [C.cedecl|int $id:(fatMemAlloc space) ($ty:ctx_ty *ctx, $ty:mty *block, typename int64_t size, const char *desc) {
-  printf("TRACE: rts: memblock_alloc: req size=%lu\n", size);
+  printf("TRACE: rts: memblock_alloc: req size=%lld\n", size);
   if (size < 0) {
     futhark_panic(1, "Negative allocation of %lld bytes attempted for %s in %s.\n",
           (long long)size, desc, $string:spacedesc, ctx->$id:usagename);
@@ -180,20 +180,11 @@ defineMemorySpace space = do
     return ret;
   }
 
-  long long new_usage = ctx->$id:usagename + size;
   if (ctx->detail_memory) {
-    fprintf(ctx->log, "Allocating %lld bytes for %s in %s (then allocated: %lld bytes)",
+    fprintf(ctx->log, "Allocating %lld bytes for %s in %s (then allocated: %lld bytes).",
             (long long) size,
             desc, $string:spacedesc,
             new_usage);
-  }
-  if (new_usage > ctx->$id:peakname) {
-    ctx->$id:peakname = new_usage;
-    if (ctx->detail_memory) {
-      fprintf(ctx->log, " (new peak).\n");
-    }
-  } else if (ctx->detail_memory) {
-    fprintf(ctx->log, ".\n");
   }
 
   size_t out_size = 0;
@@ -206,7 +197,6 @@ defineMemorySpace space = do
     block->size = (size_t)size;
     block->desc = desc;
     printf("TRACE: rts: memblock_alloc:   success: refc=%d mem=0x%016lx size=%lu\n", *(block->references), block->mem, block->size);
-    ctx->$id:usagename = new_usage;
     return FUTHARK_SUCCESS;
   } else {
     // We are naively assuming that any memory allocation error is due to OOM.
@@ -215,15 +205,8 @@ defineMemorySpace space = do
 
     // We cannot use set_error() here because we want to replace the old error.
     //lock_lock(&ctx->error_lock);
-    char *old_error = ctx->error;
-    ctx->error = msgprintf("Failed to allocate memory in %s.\nAttempted allocation: %12lld bytes\nCurrently allocated:  %12lld bytes\n%s",
-                           $string:spacedesc,
-                           (long long) size,
-                           (long long) ctx->$id:usagename,
-                           old_error);
-    free(old_error);
     //lock_unlock(&ctx->error_lock);
-    printf("TRACE: rts: memblock_alloc:   oom\n");
+    printf("TRACE: rts: memblock_alloc:   oom: size=%lu\n", (size_t)size);
     return FUTHARK_OUT_OF_MEMORY;
   }
   }|]
