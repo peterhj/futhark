@@ -71,6 +71,7 @@ defaultOperations =
       opsReadScalar = defReadScalar,
       opsAllocate = defAllocate,
       opsDeallocate = defDeallocate,
+      opsUnify = defUnify,
       opsCopy = defCopy,
       opsMemoryType = defMemoryType,
       opsCompiler = defCompiler,
@@ -88,6 +89,8 @@ defaultOperations =
       error "Cannot allocate in non-default memory space"
     defDeallocate _ _ =
       error "Cannot deallocate in non-default memory space"
+    defUnify _ _ =
+      error "Cannot unify in non-default memory space"
     defCopy _ destmem destoffset DefaultSpace srcmem srcoffset DefaultSpace size =
       copyMemoryDefaultSpace destmem destoffset srcmem srcoffset size
     defCopy _ _ _ _ _ _ _ _ =
@@ -139,13 +142,13 @@ defineMemorySpace space = do
   let unrefdef =
         [C.cedecl|int $id:(fatMemUnRef space) ($ty:ctx_ty *ctx, $ty:mty *block, const char *desc) {
   if (block->references != NULL) {
+    printf("TRACE: rts: memblock_unref: refc=%d mem=0x%016lx size=%lu\n", *(block->references), block->mem, block->size);
     *(block->references) -= 1;
     if (ctx->detail_memory) {
       fprintf(ctx->log, "Unreferencing block %s (allocated as %s) in %s: %d references remaining.\n",
                       desc, block->desc, $string:spacedesc, *(block->references));
     }
     if (*(block->references) == 0) {
-      ctx->$id:usagename -= block->size;
       $items:free
       free(block->references);
       if (ctx->detail_memory) {
@@ -154,6 +157,8 @@ defineMemorySpace space = do
       }
     }
     block->references = NULL;
+  } else {
+    printf("TRACE: rts: memblock_unref: refc=(null)\n");
   }
   return 0;
 }|]
@@ -164,6 +169,7 @@ defineMemorySpace space = do
       allocRawMem [C.cexp|block->mem|] [C.cexp|size|] space [C.cexp|desc|]
   let allocdef =
         [C.cedecl|int $id:(fatMemAlloc space) ($ty:ctx_ty *ctx, $ty:mty *block, typename int64_t size, const char *desc) {
+  printf("TRACE: rts: memblock_alloc: req size=%lu\n", size);
   if (size < 0) {
     futhark_panic(1, "Negative allocation of %lld bytes attempted for %s in %s.\n",
           (long long)size, desc, $string:spacedesc, ctx->$id:usagename);
@@ -190,13 +196,16 @@ defineMemorySpace space = do
     fprintf(ctx->log, ".\n");
   }
 
+  size_t out_size = 0;
   $items:alloc
 
   if (ctx->error == NULL) {
+    // FIXME FIXME: check that size is actually not greater than out_size.
     block->references = (int*) malloc(sizeof(int));
     *(block->references) = 1;
-    block->size = size;
+    block->size = (size_t)size;
     block->desc = desc;
+    printf("TRACE: rts: memblock_alloc:   success: refc=%d mem=0x%016lx size=%lu\n", *(block->references), block->mem, block->size);
     ctx->$id:usagename = new_usage;
     return FUTHARK_SUCCESS;
   } else {
@@ -205,7 +214,7 @@ defineMemorySpace space = do
     // glory despite our naiveté.
 
     // We cannot use set_error() here because we want to replace the old error.
-    lock_lock(&ctx->error_lock);
+    //lock_lock(&ctx->error_lock);
     char *old_error = ctx->error;
     ctx->error = msgprintf("Failed to allocate memory in %s.\nAttempted allocation: %12lld bytes\nCurrently allocated:  %12lld bytes\n%s",
                            $string:spacedesc,
@@ -213,15 +222,19 @@ defineMemorySpace space = do
                            (long long) ctx->$id:usagename,
                            old_error);
     free(old_error);
-    lock_unlock(&ctx->error_lock);
+    //lock_unlock(&ctx->error_lock);
+    printf("TRACE: rts: memblock_alloc:   oom\n");
     return FUTHARK_OUT_OF_MEMORY;
   }
   }|]
 
   -- Memory setting - unreference the destination and increase the
   -- count of the source by one.
+  unify <- collect $ unifyRawMem [C.cexp|lhs->desc|] [C.cexp|rhs->desc|] space
   let setdef =
         [C.cedecl|int $id:(fatMemSet space) ($ty:ctx_ty *ctx, $ty:mty *lhs, $ty:mty *rhs, const char *lhs_desc) {
+  printf("TRACE: rts: memblock_set: ...\n");
+  $items:unify
   int ret = $id:(fatMemUnRef space)(ctx, lhs, lhs_desc);
   if (rhs->references != NULL) {
     (*(rhs->references))++;
@@ -408,7 +421,6 @@ $utilH
 $cacheH
 $halfH
 $timingH
-$lockH
 $freeListH
 |]
 

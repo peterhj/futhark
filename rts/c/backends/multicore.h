@@ -87,6 +87,10 @@ void backend_context_teardown(struct futhark_context* ctx) {
   (void)scheduler_destroy(&ctx->scheduler);
 }
 
+void backend_context_release(struct futhark_context* ctx) {
+  (void)ctx;
+}
+
 int futhark_context_sync(struct futhark_context* ctx) {
   (void)ctx;
   return 0;

@@ -68,19 +68,21 @@ compileProg version prog = do
           GC.opsReadScalar = readCUDAScalar,
           GC.opsAllocate = allocateCUDABuffer,
           GC.opsDeallocate = deallocateCUDABuffer,
+          GC.opsUnify = unifyCUDABuffer,
           GC.opsCopy = copyCUDAMemory,
           GC.opsMemoryType = cudaMemoryType,
           GC.opsCompiler = callKernel,
           GC.opsFatMemory = True,
-          GC.opsCritical =
-            ( [C.citems|CUDA_SUCCEED_FATAL(cuCtxPushCurrent(ctx->cu_ctx));|],
-              [C.citems|CUDA_SUCCEED_FATAL(cuCtxPopCurrent(&ctx->cu_ctx));|]
-            )
+          --GC.opsCritical =
+          --  ( [C.citems|CUDA_SUCCEED_FATAL((ctx->cfg->cuCtxPushCurrent)(ctx->cu_ctx));|],
+          --    [C.citems|CUDA_SUCCEED_FATAL((ctx->cfg->cuCtxPopCurrent)(&ctx->cu_ctx));|]
+          --  )
+          GC.opsCritical = mempty
         }
     cuda_includes =
       [untrimming|
        #include <cuda.h>
-       #include <cuda_runtime.h>
+       #include <cuda_runtime_api.h>
        #include <nvrtc.h>
       |]
 
@@ -149,7 +151,7 @@ writeCUDAScalar mem idx t "device" _ val@C.Const {} = do
     [C.citem|{static $ty:t $id:val' = $exp:val;
               $items:bef
               CUDA_SUCCEED_OR_RETURN(
-                cuMemcpyHtoDAsync($exp:mem + $exp:idx * sizeof($ty:t),
+                (ctx->cfg->cuMemcpyHtoDAsync)($exp:mem + $exp:idx * sizeof($ty:t),
                                   &$id:val',
                                   sizeof($ty:t),
                                   0));
@@ -162,7 +164,7 @@ writeCUDAScalar mem idx t "device" _ val = do
     [C.citem|{$ty:t $id:val' = $exp:val;
                   $items:bef
                   CUDA_SUCCEED_OR_RETURN(
-                    cuMemcpyHtoD($exp:mem + $exp:idx * sizeof($ty:t),
+                    (ctx->cfg->cuMemcpyHtoD)($exp:mem + $exp:idx * sizeof($ty:t),
                                  &$id:val',
                                  sizeof($ty:t)));
                   $items:aft
@@ -181,7 +183,7 @@ readCUDAScalar mem idx t "device" _ = do
        {
        $items:bef
        CUDA_SUCCEED_OR_RETURN(
-          cuMemcpyDtoH(&$id:val,
+          (ctx->cfg->cuMemcpyDtoH)(&$id:val,
                        $exp:mem + $exp:idx * sizeof($ty:t),
                        sizeof($ty:t)));
        $items:aft
@@ -198,9 +200,9 @@ allocateCUDABuffer :: GC.Allocate OpenCL ()
 allocateCUDABuffer mem size tag "device" =
   GC.stm
     [C.cstm|ctx->error =
-     CUDA_SUCCEED_NONFATAL(cuda_alloc(ctx, ctx->log,
+     CUDA_SUCCEED_NONFATAL(cuda_alloc(ctx,
                                       (size_t)$exp:size, $exp:tag,
-                                      &$exp:mem, (size_t*)&$exp:size));|]
+                                      &$exp:mem, &out_size));|]
 allocateCUDABuffer _ _ _ space =
   error $ "Cannot allocate in '" ++ space ++ "' memory space."
 
@@ -209,6 +211,13 @@ deallocateCUDABuffer mem size tag "device" =
   GC.stm [C.cstm|CUDA_SUCCEED_OR_RETURN(cuda_free(ctx, $exp:mem, $exp:size, $exp:tag));|]
 deallocateCUDABuffer _ _ _ space =
   error $ "Cannot deallocate in '" ++ space ++ "' memory space."
+
+unifyCUDABuffer :: GC.Unify OpenCL ()
+unifyCUDABuffer lhs_tag rhs_tag "device" =
+  GC.stm
+    [C.cstm|cuda_unify(ctx, $exp:lhs_tag, $exp:rhs_tag);|]
+unifyCUDABuffer _ _ space =
+  error $ "Cannot unify in '" ++ space ++ "' memory space."
 
 copyCUDAMemory :: GC.Copy OpenCL ()
 copyCUDAMemory b dstmem dstidx dstSpace srcmem srcidx srcSpace nbytes = do
@@ -220,15 +229,15 @@ copyCUDAMemory b dstmem dstidx dstSpace srcmem srcidx srcSpace nbytes = do
     dst = [C.cexp|$exp:dstmem + $exp:dstidx|]
     src = [C.cexp|$exp:srcmem + $exp:srcidx|]
     memcpyFun GC.CopyBarrier DefaultSpace (Space "device") =
-      ([C.cexp|cuMemcpyDtoH($exp:dst, $exp:src, $exp:nbytes)|], copyDevToHost)
+      ([C.cexp|(ctx->cfg->cuMemcpyDtoH)($exp:dst, $exp:src, $exp:nbytes)|], copyDevToHost)
     memcpyFun GC.CopyBarrier (Space "device") DefaultSpace =
-      ([C.cexp|cuMemcpyHtoD($exp:dst, $exp:src, $exp:nbytes)|], copyHostToDev)
+      ([C.cexp|(ctx->cfg->cuMemcpyHtoD)($exp:dst, $exp:src, $exp:nbytes)|], copyHostToDev)
     memcpyFun _ (Space "device") (Space "device") =
-      ([C.cexp|cuMemcpy($exp:dst, $exp:src, $exp:nbytes)|], copyDevToDev)
+      ([C.cexp|(ctx->cfg->cuMemcpyAsync)($exp:dst, $exp:src, $exp:nbytes, ctx->stream)|], copyDevToDev)
     memcpyFun GC.CopyNoBarrier DefaultSpace (Space "device") =
-      ([C.cexp|cuMemcpyDtoHAsync($exp:dst, $exp:src, $exp:nbytes, 0)|], copyDevToHost)
+      ([C.cexp|(ctx->cfg->cuMemcpyDtoHAsync)($exp:dst, $exp:src, $exp:nbytes, ctx->stream)|], copyDevToHost)
     memcpyFun GC.CopyNoBarrier (Space "device") DefaultSpace =
-      ([C.cexp|cuMemcpyHtoDAsync($exp:dst, $exp:src, $exp:nbytes, 0)|], copyHostToDev)
+      ([C.cexp|(ctx->cfg->cuMemcpyHtoDAsync)($exp:dst, $exp:src, $exp:nbytes, ctx->stream)|], copyHostToDev)
     memcpyFun _ _ _ =
       error $
         "Cannot copy to '"
@@ -341,14 +350,14 @@ callKernel (LaunchKernel safety kernel_name args num_blocks block_size) = do
       }
       $items:bef
       CUDA_SUCCEED_OR_RETURN(
-        cuLaunchKernel(ctx->program->$id:kernel_name,
+        (ctx->cfg->cuLaunchKernel)(ctx->program->$id:kernel_name,
                        grid[0], grid[1], grid[2],
                        $exp:block_x, $exp:block_y, $exp:block_z,
-                       $exp:shared_tot, NULL,
+                       $exp:shared_tot, ctx->stream,
                        $id:args_arr, NULL));
       $items:aft
       if (ctx->debugging) {
-        CUDA_SUCCEED_FATAL(cuCtxSynchronize());
+        CUDA_SUCCEED_FATAL((ctx->cfg->cuCtxSynchronize)());
         $id:time_end = get_wall_time();
         fprintf(ctx->log, "Kernel %s runtime: %ldus\n",
                 $string:(prettyString kernel_name), $id:time_end - $id:time_start);

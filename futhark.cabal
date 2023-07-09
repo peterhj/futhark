@@ -520,7 +520,7 @@ library
     , prettyprinter >= 1.7
     , prettyprinter-ansi-terminal >= 1.1
 
-executable futhark
+executable cacti-futhark
   import: common
   main-is: src/main.hs
   ghc-options: -threaded -rtsopts "-with-rtsopts=-maxN16 -qg1 -A16M"

@@ -23,7 +23,7 @@ build:
 	cabal build
 
 install: build
-	install -D "$$(cabal -v0 list-bin exe:futhark)" $(PREFIX)/bin/futhark
+	install -D "$$(cabal -v0 list-bin exe:cacti-futhark)" $(PREFIX)/bin/cacti-futhark
 
 docs:
 	cabal haddock \
