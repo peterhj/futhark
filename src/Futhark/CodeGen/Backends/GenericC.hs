@@ -421,6 +421,7 @@ $utilH
 $cacheH
 $halfH
 $timingH
+$lockH
 $freeListH
 |]
 
