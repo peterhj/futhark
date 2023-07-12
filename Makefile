@@ -8,7 +8,7 @@ PREFIX?=$(HOME)/.local
 # Disable all implicit rules.
 .SUFFIXES:
 
-.PHONY: all configure build install docs check check-commit clean
+.PHONY: all configure dev-build dev-install build install docs check check-commit clean
 
 all: build
 
@@ -19,11 +19,16 @@ configure:
 configure-profile:
 	cabal configure --enable-profiling --profiling-detail=toplevel-functions
 
-build:
+dev-build:
 	cabal build
 
-install: build
+dev-install: dev-build
 	install -D "$$(cabal -v0 list-bin exe:cacti-futhark)" $(PREFIX)/bin/cacti-futhark
+
+build: install
+
+install:
+	cabal install exe:cacti-futhark --overwrite-policy=always
 
 docs:
 	cabal haddock \
