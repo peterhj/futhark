@@ -8,7 +8,7 @@ PREFIX?=$(HOME)/.local
 # Disable all implicit rules.
 .SUFFIXES:
 
-.PHONY: all configure dev-build dev-install build install docs check check-commit clean
+.PHONY: all configure dev dev-build dev-install build install docs check check-commit clean
 
 all: build
 
@@ -18,6 +18,8 @@ configure:
 
 configure-profile:
 	cabal configure --enable-profiling --profiling-detail=toplevel-functions
+
+dev: dev-build
 
 dev-build:
 	cabal build

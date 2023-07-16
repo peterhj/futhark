@@ -11,6 +11,11 @@ struct futhark_context_config {
   const char** tuning_param_names;
   const char** tuning_param_vars;
   const char** tuning_param_classes;
+
+  int (*mem_alloc)(void **, size_t, const char *);
+  int (*mem_free)(void *);
+  void (*mem_unify)(const char *, const char *);
+
   // Uniform fields above.
 
   int num_threads;

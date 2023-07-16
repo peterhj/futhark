@@ -11,6 +11,10 @@ struct futhark_context_config {
   const char** tuning_param_names;
   const char** tuning_param_vars;
   const char** tuning_param_classes;
+
+  int (*mem_alloc)(void **, size_t, const char *);
+  int (*mem_free)(void *);
+  void (*mem_unify)(const char *, const char *);
 };
 
 static void backend_context_config_setup(struct futhark_context_config* cfg) {
@@ -50,6 +54,10 @@ int backend_context_setup(struct futhark_context* ctx) {
 }
 
 void backend_context_teardown(struct futhark_context* ctx) {
+  (void)ctx;
+}
+
+void backend_context_release(struct futhark_context* ctx) {
   (void)ctx;
 }
 

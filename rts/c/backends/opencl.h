@@ -115,6 +115,11 @@ struct futhark_context_config {
   const char** tuning_param_names;
   const char** tuning_param_vars;
   const char** tuning_param_classes;
+
+  int (*mem_alloc)(void **, size_t, const char *);
+  int (*mem_free)(void *);
+  void (*mem_unify)(const char *, const char *);
+
   // Uniform fields above.
 
   int preferred_device_num;
@@ -172,6 +177,11 @@ static void backend_context_config_setup(struct futhark_context_config* cfg) {
 
 static void backend_context_config_teardown(struct futhark_context_config* cfg) {
   free(cfg->build_opts);
+}
+
+void backend_context_release(struct futhark_context* ctx) {
+  // FIXME FIXME
+  (void)ctx;
 }
 
 void futhark_context_config_add_build_option(struct futhark_context_config* cfg, const char *opt) {

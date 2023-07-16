@@ -52,7 +52,7 @@ static int is_small_alloc(size_t size) {
 
 static void host_unify(struct futhark_context* ctx,
                        const char *lhs_tag, const char *rhs_tag) {
-  // FIXME
+  (ctx->cfg->mem_unify)(lhs_tag, rhs_tag);
 }
 
 static void host_alloc(struct futhark_context* ctx,
@@ -60,7 +60,8 @@ static void host_alloc(struct futhark_context* ctx,
   const char *tag_out = NULL;
   if (is_small_alloc(size) || free_list_find(&ctx->free_list, size, tag, size_out, (fl_mem*)mem_out, &tag_out) != 0) {
     *size_out = size;
-    *mem_out = malloc(size);
+    int ret = (ctx->cfg->mem_alloc)(mem_out, size, tag_out);
+    assert(ret == 0);
     host_unify(ctx, tag, tag_out);
   }
 }
@@ -73,7 +74,7 @@ static void host_free(struct futhark_context* ctx,
   // very slow, and Futhark programs tend to use a few very large
   // allocations.
   if (is_small_alloc(size)) {
-    free(mem);
+    (ctx->cfg->mem_free)(mem);
   } else {
     free_list_insert(&ctx->free_list, size, (fl_mem)mem, tag);
   }
@@ -107,6 +108,18 @@ void futhark_context_config_free(struct futhark_context_config* cfg) {
   free(cfg->tuning_params);
   free(cfg);
   printf("rts: futhark_context_config_free: done\n");
+}
+
+void futhark_context_config_set_mem_alloc(struct futhark_context_config *cfg, void *ptr) {
+  cfg->mem_alloc = ptr;
+}
+
+void futhark_context_config_set_mem_free(struct futhark_context_config *cfg, void *ptr) {
+  cfg->mem_free = ptr;
+}
+
+void futhark_context_config_set_mem_unify(struct futhark_context_config *cfg, void *ptr) {
+  cfg->mem_unify = ptr;
 }
 
 struct futhark_context* futhark_context_new(struct futhark_context_config* cfg) {

@@ -41,6 +41,11 @@ struct futhark_context_config {
   const char** tuning_param_names;
   const char** tuning_param_vars;
   const char** tuning_param_classes;
+
+  int (*mem_alloc)(void **, size_t, const char *);
+  int (*mem_free)(void *);
+  void (*mem_unify)(const char *, const char *);
+
   // Uniform fields above.
 
   int num_nvrtc_opts;
@@ -68,11 +73,11 @@ struct futhark_context_config {
   CUdevice setup_dev;
   CUstream setup_stream;
 
-  CUresult (*gpu_alloc)(CUdeviceptr *, size_t, const char *);
-  CUresult (*gpu_free)(CUdeviceptr);
+  int (*gpu_alloc)(CUdeviceptr *, size_t, const char *);
+  int (*gpu_free)(CUdeviceptr);
   void (*gpu_unify)(const char *, const char *);
-  CUresult (*gpu_global_failure_alloc)(CUdeviceptr *, size_t);
-  CUresult (*gpu_global_failure_free)(CUdeviceptr);
+  int (*gpu_global_failure_alloc)(CUdeviceptr *, size_t);
+  int (*gpu_global_failure_free)(CUdeviceptr);
 
   CUresult (*cuGetErrorString)(int, const char **);
   CUresult (*cuInit)(unsigned int);
