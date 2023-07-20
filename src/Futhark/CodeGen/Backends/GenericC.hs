@@ -34,7 +34,7 @@ import Futhark.CodeGen.Backends.GenericC.Fun
 import Futhark.CodeGen.Backends.GenericC.Monad
 import Futhark.CodeGen.Backends.GenericC.Options
 import Futhark.CodeGen.Backends.GenericC.Pretty
-import Futhark.CodeGen.Backends.GenericC.Server (serverDefs)
+import Futhark.CodeGen.Backends.GenericC.Server (serverDefs, miniserverDefs)
 import Futhark.CodeGen.Backends.GenericC.Types
 import Futhark.CodeGen.ImpCode
 import Futhark.CodeGen.RTS.C (cacheH, contextH, contextPrototypesH, errorsH, freeListH, halfH, lockH, timingH, utilH)
@@ -265,6 +265,7 @@ data CParts = CParts
     cUtils :: T.Text,
     cCLI :: T.Text,
     cServer :: T.Text,
+    cMiniServer :: T.Text,
     cLib :: T.Text,
     -- | The manifest, in JSON format.
     cJsonManifest :: T.Text
@@ -308,7 +309,7 @@ disableWarnings =
 asLibrary :: CParts -> (T.Text, T.Text, T.Text)
 asLibrary parts =
   ( "#pragma once\n\n" <> cHeader parts,
-    gnuSource <> disableWarnings <> cHeader parts <> cUtils parts <> cServer parts <> cLib parts,
+    gnuSource <> disableWarnings <> cHeader parts <> cUtils parts <> cMiniServer parts <> cLib parts,
     cJsonManifest parts
   )
 
@@ -411,6 +412,7 @@ $freeListH
       lib_decls = definitionsText $ DL.toList $ compLibDecls endstate
       clidefs = cliDefs options manifest
       serverdefs = serverDefs options manifest
+      miniserverdefs = miniserverDefs options manifest
       libdefs =
         [untrimming|
 #ifdef _MSC_VER
@@ -449,6 +451,7 @@ $entry_point_decls
           cUtils = utildefs,
           cCLI = clidefs,
           cServer = serverdefs,
+          cMiniServer = miniserverdefs,
           cLib = libdefs,
           cJsonManifest = Manifest.manifestToJSON manifest
         },

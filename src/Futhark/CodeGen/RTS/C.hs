@@ -8,6 +8,7 @@ module Futhark.CodeGen.RTS.C
     freeListH,
     halfH,
     lockH,
+    miniserverH,
     scalarF16H,
     scalarH,
     schedulerH,
@@ -57,6 +58,11 @@ halfH = $(embedStringFile "rts/c/half.h")
 lockH :: T.Text
 lockH = $(embedStringFile "rts/c/lock.h")
 {-# NOINLINE lockH #-}
+
+-- | @rts/c/miniserver.h@
+miniserverH :: T.Text
+miniserverH = $(embedStringFile "rts/c/miniserver.h")
+{-# NOINLINE miniserverH #-}
 
 -- | @rts/c/scalar_f16.h@
 scalarF16H :: T.Text

@@ -3,6 +3,7 @@
 -- | Code generation for server executables.
 module Futhark.CodeGen.Backends.GenericC.Server
   ( serverDefs,
+    miniserverDefs,
   )
 where
 
@@ -12,7 +13,7 @@ import Data.Text qualified as T
 import Futhark.CodeGen.Backends.GenericC.Options
 import Futhark.CodeGen.Backends.GenericC.Pretty
 import Futhark.CodeGen.Backends.SimpleRep
-import Futhark.CodeGen.RTS.C (serverH, tuningH, valuesH)
+import Futhark.CodeGen.RTS.C (serverH, tuningH, valuesH, miniserverH)
 import Futhark.Manifest
 import Futhark.Util (zEncodeText)
 import Language.C.Quote.OpenCL qualified as C
@@ -354,7 +355,7 @@ struct futhark_prog prog = {
   .entry_points = entry_points
 };
 
-/*$func:option_parser
+$func:option_parser
 
 int main(int argc, char** argv) {
   fut_progname = argv[0];
@@ -386,5 +387,78 @@ int main(int argc, char** argv) {
 
   futhark_context_free(ctx);
   futhark_context_config_free(cfg);
-}*/
+}
+|]
+
+miniOneEntryBoilerplate :: Manifest -> (T.Text, EntryPoint) -> ([C.Definition], C.Initializer)
+miniOneEntryBoilerplate manifest (name, EntryPoint cfun tuning_params outputs inputs) =
+  let call_f = "futhark_call_" <> nameFromText name
+      out_types = map outputType outputs
+      in_types = map inputType inputs
+      (out_items, out_args)
+        | null out_types = ([C.citems|(void)outs;|], mempty)
+        | otherwise = unzip $ zipWith loadOut [0 ..] out_types
+      (in_items, in_args)
+        | null in_types = ([C.citems|(void)ins;|], mempty)
+        | otherwise = unzip $ zipWith loadIn [0 ..] in_types
+   in ( [C.cunit|
+                int $id:call_f(struct futhark_context *ctx, void **outs, void **ins) {
+                  $items:out_items
+                  $items:in_items
+                  return $id:cfun(ctx, $args:out_args, $args:in_args);
+                }
+                |],
+        [C.cinit|{
+            .name = $string:(T.unpack name),
+            .f = $id:call_f
+            }|]
+      )
+  where
+    loadOut i tname =
+      let v = "out" ++ show (i :: Int)
+       in ( [C.citem|$ty:(cType manifest tname) *$id:v = outs[$int:i];|],
+            [C.cexp|$id:v|]
+          )
+    loadIn i tname =
+      let v = "in" ++ show (i :: Int)
+       in ( [C.citem|$ty:(cType manifest tname) $id:v = *($ty:(cType manifest tname)*)ins[$int:i];|],
+            [C.cexp|$id:v|]
+          )
+
+miniEntryBoilerplate :: Manifest -> ([C.Definition], [C.Initializer])
+miniEntryBoilerplate manifest =
+  first concat $
+    unzip $
+      map (miniOneEntryBoilerplate manifest) $
+        M.toList $
+          manifestEntryPoints manifest
+
+miniMkBoilerplate ::
+  Manifest ->
+  ([C.Definition], [C.Initializer])
+miniMkBoilerplate manifest =
+  let (entry_defs, entry_inits) = miniEntryBoilerplate manifest
+   in (entry_defs, entry_inits)
+
+{-# NOINLINE miniserverDefs #-}
+
+-- | Generate Futhark minimal server executable code.
+miniserverDefs :: [Option] -> Manifest -> T.Text
+miniserverDefs options manifest =
+  let (boilerplate_defs, entry_point_inits) =
+        miniMkBoilerplate manifest
+   in definitionsText
+        [C.cunit|
+$esc:(T.unpack miniserverH)
+
+$edecls:boilerplate_defs
+
+struct entry_point entry_points[] = {
+  $inits:entry_point_inits,
+  { .name = NULL }
+};
+
+struct futhark_prog prog = {
+  .entry_points = entry_points
+};
 |]
