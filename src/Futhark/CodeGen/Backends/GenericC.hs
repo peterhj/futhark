@@ -308,7 +308,7 @@ disableWarnings =
 asLibrary :: CParts -> (T.Text, T.Text, T.Text)
 asLibrary parts =
   ( "#pragma once\n\n" <> cHeader parts,
-    gnuSource <> disableWarnings <> cHeader parts <> cUtils parts <> cLib parts,
+    gnuSource <> disableWarnings <> cHeader parts <> cUtils parts <> cServer parts <> cLib parts,
     cJsonManifest parts
   )
 
