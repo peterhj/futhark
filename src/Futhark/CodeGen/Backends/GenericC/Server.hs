@@ -214,7 +214,7 @@ entryTypeBoilerplate manifest =
 
 oneEntryBoilerplate :: Manifest -> (T.Text, EntryPoint) -> ([C.Definition], C.Initializer)
 oneEntryBoilerplate manifest (name, EntryPoint cfun tuning_params outputs inputs) =
-  let call_f = "futhark_call_" <> nameFromText name
+  let call_f = "call_" <> nameFromText name
       out_types = map outputType outputs
       in_types = map inputType inputs
       out_types_name = nameFromText name <> "_out_types"
