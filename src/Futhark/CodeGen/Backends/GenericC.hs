@@ -412,7 +412,7 @@ $freeListH
       lib_decls = definitionsText $ DL.toList $ compLibDecls endstate
       clidefs = cliDefs options manifest
       serverdefs = serverDefs options manifest
-      miniserverdefs = miniserverDefs options manifest
+      miniserverdefs = miniserverDefs manifest
       libdefs =
         [untrimming|
 #ifdef _MSC_VER

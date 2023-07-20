@@ -443,8 +443,8 @@ miniMkBoilerplate manifest =
 {-# NOINLINE miniserverDefs #-}
 
 -- | Generate Futhark minimal server executable code.
-miniserverDefs :: [Option] -> Manifest -> T.Text
-miniserverDefs options manifest =
+miniserverDefs :: Manifest -> T.Text
+miniserverDefs manifest =
   let (boilerplate_defs, entry_point_inits) =
         miniMkBoilerplate manifest
    in definitionsText
