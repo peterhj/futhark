@@ -1223,10 +1223,6 @@ int futhark_context_sync(struct futhark_context* ctx) {
   return 0;
 }
 
-const char *futhark_context_error(struct futhark_context* ctx) {
-  return ctx->error;
-}
-
 int backend_context_setup(struct futhark_context* ctx) {
   ctx->dev = ctx->cfg->setup_dev;
   ctx->stream = ctx->cfg->setup_stream;

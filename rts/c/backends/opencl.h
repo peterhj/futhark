@@ -179,11 +179,6 @@ static void backend_context_config_teardown(struct futhark_context_config* cfg) 
   free(cfg->build_opts);
 }
 
-void backend_context_release(struct futhark_context* ctx) {
-  // FIXME FIXME
-  (void)ctx;
-}
-
 void futhark_context_config_add_build_option(struct futhark_context_config* cfg, const char *opt) {
   cfg->build_opts[cfg->num_build_opts] = opt;
   cfg->num_build_opts++;
@@ -1231,6 +1226,11 @@ void backend_context_teardown(struct futhark_context* ctx) {
   (void)clReleaseProgram(ctx->clprogram);
   (void)clReleaseCommandQueue(ctx->queue);
   (void)clReleaseContext(ctx->ctx);
+}
+
+void backend_context_release(struct futhark_context* ctx) {
+  // FIXME FIXME
+  (void)ctx;
 }
 
 cl_command_queue futhark_context_get_command_queue(struct futhark_context* ctx) {

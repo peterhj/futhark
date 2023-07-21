@@ -416,7 +416,7 @@ miniOneEntryBoilerplate manifest (name, EntryPoint cfun tuning_params outputs in
   where
     loadOut i tname =
       let v = "out" ++ show (i :: Int)
-       in ( [C.citem|$ty:(cType manifest tname) *$id:v = outs[$int:i];|],
+       in ( [C.citem|$ty:(cType manifest tname) *$id:v = ($ty:(cType manifest tname)*)outs[$int:i];|],
             [C.cexp|$id:v|]
           )
     loadIn i tname =
@@ -442,7 +442,7 @@ miniMkBoilerplate manifest =
 
 {-# NOINLINE miniserverDefs #-}
 
--- | Generate Futhark minimal server executable code.
+-- | Generate minimal entry point interface, based on the Futhark server code.
 miniserverDefs :: Manifest -> T.Text
 miniserverDefs manifest =
   let (boilerplate_defs, entry_point_inits) =

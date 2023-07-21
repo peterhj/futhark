@@ -185,6 +185,10 @@ void futhark_context_free(struct futhark_context* ctx) {
   printf("rts: futhark_context_free: done\n");
 }
 
+const char* futhark_context_error(struct futhark_context* ctx) {
+  return ctx->error;
+}
+
 void futhark_context_reset(struct futhark_context* ctx) {
   printf("rts: futhark_context_reset: ...\n");
   free_constants(ctx);
