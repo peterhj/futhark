@@ -37,6 +37,7 @@ struct futhark_context {
   int profiling;
   int profiling_paused;
   int logging;
+  int tracing;
   lock_t lock;
   char *error;
   lock_t error_lock;

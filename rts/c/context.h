@@ -89,6 +89,11 @@ struct futhark_context_config* futhark_context_config_new(void) {
   cfg->debugging = 0;
   cfg->profiling = 0;
   cfg->logging = 0;
+  if (getenv("CACTI_FUTHARK_TRACE") != NULL) {
+    cfg->tracing = 1;
+  } else {
+    cfg->tracing = 0;
+  }
   cfg->cache_fname = NULL;
   cfg->num_tuning_params = num_tuning_params;
   cfg->tuning_params = malloc(cfg->num_tuning_params * sizeof(int64_t));
@@ -102,12 +107,12 @@ struct futhark_context_config* futhark_context_config_new(void) {
 }
 
 void futhark_context_config_free(struct futhark_context_config* cfg) {
-  printf("rts: futhark_context_config_free: ...\n");
+  if (cfg->tracing) printf("TRACE: rts: futhark_context_config_free: ...\n");
   assert(!cfg->in_use);
   backend_context_config_teardown(cfg);
   free(cfg->tuning_params);
   free(cfg);
-  printf("rts: futhark_context_config_free: done\n");
+  if (cfg->tracing) printf("TRACE: rts: futhark_context_config_free: done\n");
 }
 
 void futhark_context_config_set_mem_alloc(struct futhark_context_config *cfg, void *ptr) {
@@ -123,7 +128,7 @@ void futhark_context_config_set_mem_unify(struct futhark_context_config *cfg, vo
 }
 
 struct futhark_context* futhark_context_new(struct futhark_context_config* cfg) {
-  printf("rts: futhark_context_new: ...\n");
+  if (cfg->tracing) printf("TRACE: rts: futhark_context_new: ...\n");
   struct futhark_context* ctx = malloc(sizeof(struct futhark_context));
   if (ctx == NULL) {
     return NULL;
@@ -133,7 +138,7 @@ struct futhark_context* futhark_context_new(struct futhark_context_config* cfg) 
   ctx->cfg->in_use = 1;
   //create_lock(&ctx->error_lock);
   //create_lock(&ctx->lock);
-  printf("rts: futhark_context_new: init free list...\n");
+  if (cfg->tracing) printf("TRACE: rts: futhark_context_new: init free list...\n");
   free_list_init(&ctx->free_list);
   ctx->peak_mem_usage_default = 0;
   ctx->cur_mem_usage_default = 0;
@@ -145,44 +150,48 @@ struct futhark_context* futhark_context_new(struct futhark_context_config* cfg) 
   ctx->profiling_paused = 0;
   ctx->error = NULL;
   ctx->log = stderr;
-  printf("rts: futhark_context_new: setup backend...\n");
+  if (cfg->tracing) printf("TRACE: rts: futhark_context_new: setup backend...\n");
   if (backend_context_setup(ctx) == 0) {
-    printf("rts: futhark_context_new: set tuning params...\n");
+    if (cfg->tracing) printf("TRACE: rts: futhark_context_new: set tuning params...\n");
     set_tuning_params(ctx);
-    printf("rts: futhark_context_new: setup program...\n");
+    if (cfg->tracing) printf("TRACE: rts: futhark_context_new: setup program...\n");
     setup_program(ctx);
-    printf("rts: futhark_context_new: init constants...\n");
+    if (cfg->tracing) printf("TRACE: rts: futhark_context_new: init constants...\n");
     init_constants(ctx);
-    printf("rts: futhark_context_new: clear caches...\n");
+    if (cfg->tracing) printf("TRACE: rts: futhark_context_new: clear caches...\n");
     (void)futhark_context_clear_caches(ctx);
-    //printf("rts: futhark_context_new: sync...\n");
+    //if (cfg->tracing) printf("TRACE: rts: futhark_context_new: sync...\n");
     //(void)futhark_context_sync(ctx);
   }
-  printf("rts: futhark_context_new: done\n");
+  if (cfg->tracing) printf("TRACE: rts: futhark_context_new: done\n");
   return ctx;
 }
 
 void futhark_context_free(struct futhark_context* ctx) {
-  printf("rts: futhark_context_free: free constants...\n");
+  if (ctx->cfg->tracing) printf("TRACE: rts: futhark_context_free: free constants...\n");
   free_constants(ctx);
-  printf("rts: futhark_context_free: teardown program...\n");
+  if (ctx->cfg->tracing) printf("TRACE: rts: futhark_context_free: teardown program...\n");
   teardown_program(ctx);
-  printf("rts: futhark_context_free: teardown backend ctx...\n");
+  if (ctx->cfg->tracing) printf("TRACE: rts: futhark_context_free: teardown backend ctx...\n");
   backend_context_teardown(ctx);
-  printf("rts: futhark_context_free: free all...\n");
+  if (ctx->cfg->tracing) printf("TRACE: rts: futhark_context_free: free all...\n");
   free_all_in_free_list(ctx);
-  printf("rts: futhark_context_free: destroy free list...\n");
+  if (ctx->cfg->tracing) printf("TRACE: rts: futhark_context_free: destroy free list...\n");
   free_list_destroy(&ctx->free_list);
-  printf("rts: futhark_context_free: free constants...\n");
+  if (ctx->cfg->tracing) printf("TRACE: rts: futhark_context_free: free constants...\n");
   free(ctx->constants);
-  //printf("rts: futhark_context_free: free locks...\n");
+  //if (ctx->cfg->tracing) printf("TRACE: rts: futhark_context_free: free locks...\n");
   //free_lock(&ctx->lock);
   //free_lock(&ctx->error_lock);
-  printf("rts: futhark_context_free: unset cfg in_use...\n");
+  if (ctx->cfg->tracing) printf("TRACE: rts: futhark_context_free: unset cfg in_use...\n");
   ctx->cfg->in_use = 0;
-  printf("rts: futhark_context_free: free ctx...\n");
+  if (ctx->cfg->tracing) printf("TRACE: rts: futhark_context_free: free ctx...\n");
   free(ctx);
-  printf("rts: futhark_context_free: done\n");
+  if (ctx->cfg->tracing) printf("TRACE: rts: futhark_context_free: done\n");
+}
+
+int futhark_context_trace(struct futhark_context* ctx) {
+  return ctx->cfg->tracing;
 }
 
 const char* futhark_context_error(struct futhark_context* ctx) {
@@ -190,19 +199,19 @@ const char* futhark_context_error(struct futhark_context* ctx) {
 }
 
 void futhark_context_reset(struct futhark_context* ctx) {
-  printf("rts: futhark_context_reset: ...\n");
+  if (ctx->cfg->tracing) printf("TRACE: rts: futhark_context_reset: ...\n");
   free_constants(ctx);
   init_constants(ctx);
-  printf("rts: futhark_context_reset: done\n");
+  if (ctx->cfg->tracing) printf("TRACE: rts: futhark_context_reset: done\n");
 }
 
 void futhark_context_release(struct futhark_context* ctx) {
-  printf("rts: futhark_context_release: ...\n");
+  if (ctx->cfg->tracing) printf("TRACE: rts: futhark_context_release: ...\n");
   free_all_in_free_list(ctx);
   //free_list_destroy(&ctx->free_list);
   //free_list_init(&ctx->free_list);
   backend_context_release(ctx);
-  printf("rts: futhark_context_release: done\n");
+  if (ctx->cfg->tracing) printf("TRACE: rts: futhark_context_release: done\n");
 }
 
 // End of context.h

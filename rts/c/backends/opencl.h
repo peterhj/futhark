@@ -109,6 +109,7 @@ struct futhark_context_config {
   int debugging;
   int profiling;
   int logging;
+  int tracing;
   const char *cache_fname;
   int num_tuning_params;
   int64_t *tuning_params;

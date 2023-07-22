@@ -35,6 +35,7 @@ struct futhark_context_config {
   int debugging;
   int profiling;
   int logging;
+  int tracing;
   const char *cache_fname;
   int num_tuning_params;
   int64_t *tuning_params;
@@ -1069,13 +1070,13 @@ static CUresult cuda_alloc(struct futhark_context *ctx,
 
   const char *tag_out = NULL;
   if (free_list_find(&ctx->cu_free_list, min_size, tag, size_out, (fl_mem*)mem_out, &tag_out) == 0) {
-    printf("TRACE: rts: cuda_alloc: found free block: min_size=%lu size=%lu\n", min_size, *size_out);
+    if (ctx->cfg->tracing) printf("TRACE: rts: cuda_alloc: found free block: min_size=%lu size=%lu\n", min_size, *size_out);
     if (*size_out >= min_size) {
       if (ctx->cfg->debugging) {
         fprintf(ctx->log, "No need to allocate: Found a block in the free list.\n");
       }
       cuda_unify(ctx, tag, tag_out);
-      printf("TRACE: rts: cuda_alloc:   return free block\n");
+      if (ctx->cfg->tracing) printf("TRACE: rts: cuda_alloc:   return free block\n");
       return CUDA_SUCCESS;
     } else {
       if (ctx->cfg->debugging) {
@@ -1108,21 +1109,21 @@ static CUresult cuda_alloc(struct futhark_context *ctx,
     }
     res = (ctx->cfg->gpu_alloc)(mem_out, min_size, tag);
   }
-  printf("TRACE: rts: cuda_alloc: alloc fresh block: dptr=0x%016lx size=%lu\n", (*mem_out), min_size);
+  if (ctx->cfg->tracing) printf("TRACE: rts: cuda_alloc: alloc fresh block: dptr=0x%016lx size=%lu\n", (*mem_out), min_size);
 
   return res;
 }
 
 static CUresult cuda_free(struct futhark_context *ctx,
                           CUdeviceptr mem, size_t size, const char *tag) {
-  printf("TRACE: rts: cuda_free: dptr=0x%016lx size=%lu\n", mem, size);
+  if (ctx->cfg->tracing) printf("TRACE: rts: cuda_free: dptr=0x%016lx size=%lu\n", mem, size);
   free_list_insert(&ctx->cu_free_list, size, (fl_mem)mem, tag);
   return CUDA_SUCCESS;
 }
 
 static CUresult cuda_free_all(struct futhark_context *ctx) {
   CUdeviceptr mem;
-  printf("TRACE: rts: cuda_free_all\n");
+  if (ctx->cfg->tracing) printf("TRACE: rts: cuda_free_all\n");
   free_list_pack(&ctx->cu_free_list);
   while (free_list_first(&ctx->cu_free_list, (fl_mem*)&mem) == 0) {
     CUresult res = (ctx->cfg->gpu_free)(mem);
@@ -1267,11 +1268,11 @@ void backend_context_teardown(struct futhark_context* ctx) {
 }
 
 void backend_context_release(struct futhark_context* ctx) {
-  printf("rts: cuda: backend_context_release: ...\n");
+  if (ctx->cfg->tracing) printf("TRACE: rts: cuda: backend_context_release: ...\n");
   CUDA_SUCCEED_FATAL(cuda_free_all(ctx));
   //free_list_destroy(&ctx->cu_free_list);
   //free_list_init(&ctx->cu_free_list);
-  printf("rts: cuda: backend_context_release: done\n");
+  if (ctx->cfg->tracing) printf("TRACE: rts: cuda: backend_context_release: done\n");
 }
 
 // End of backends/cuda.h.

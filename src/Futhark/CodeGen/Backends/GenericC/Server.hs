@@ -393,7 +393,7 @@ int main(int argc, char** argv) {
 miniOneEntryBoilerplate :: Manifest -> (T.Text, EntryPoint) -> ([C.Definition], C.Initializer)
 miniOneEntryBoilerplate manifest (name, EntryPoint cfun tuning_params outputs inputs) =
   let call_f = "futhark_call_" <> nameFromText name
-      prelude_items = [C.citems|printf("TRACE: rts: futhark_call_kernel: ctx=0x%016lx\n", (ctx));|]
+      prelude_items = [C.citems|if (futhark_context_trace(ctx)) printf("TRACE: rts: futhark_call_kernel: ctx=0x%016lx\n", (ctx));|]
       out_types = map outputType outputs
       in_types = map inputType inputs
       (out_items, out_args)
@@ -422,14 +422,14 @@ miniOneEntryBoilerplate manifest (name, EntryPoint cfun tuning_params outputs in
   where
     loadOut i tname =
       let v = "out" ++ show (i :: Int)
-       in ( [C.citems|printf("TRACE: rts: futhark_call_kernel: out[%d]=0x%016lx\n", $int:i, (outs[$int:i]));
+       in ( [C.citems|if (futhark_context_trace(ctx)) printf("TRACE: rts: futhark_call_kernel: out[%d]=0x%016lx\n", $int:i, (outs[$int:i]));
                       $ty:(cType manifest tname) *$id:v = ($ty:(cType manifest tname)*)(outs[$int:i]);|],
             [C.cexp|$id:v|]
           )
     loadIn i tname =
       let v = "in" ++ show (i :: Int)
-       in ( [C.citems|printf("TRACE: rts: futhark_call_kernel: arg[%d]=0x%016lx\n", $int:i, (ins[$int:i]));
-                      printf("TRACE: rts: futhark_call_kernel: *arg[%d]=0x%016lx\n", $int:i, (*(($ty:(cType manifest tname)*)(ins[$int:i]))));
+       in ( [C.citems|if (futhark_context_trace(ctx)) printf("TRACE: rts: futhark_call_kernel: arg[%d]=0x%016lx\n", $int:i, (ins[$int:i]));
+                      if (futhark_context_trace(ctx)) printf("TRACE: rts: futhark_call_kernel: *arg[%d]=0x%016lx\n", $int:i, (*(($ty:(cType manifest tname)*)(ins[$int:i]))));
                       $ty:(cType manifest tname) $id:v = *(($ty:(cType manifest tname)*)(ins[$int:i]));|],
             [C.cexp|$id:v|]
           )
