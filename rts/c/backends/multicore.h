@@ -6,6 +6,7 @@ struct futhark_context_config {
   char profiling;
   char logging;
   char tracing;
+  char pedantic;
   const char *cache_fname;
   int num_tuning_params;
   int64_t *tuning_params;

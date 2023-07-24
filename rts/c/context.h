@@ -94,6 +94,11 @@ struct futhark_context_config* futhark_context_config_new(void) {
   } else {
     cfg->tracing = 0;
   }
+  if (getenv("CACTI_FUTHARK_PEDANTIC") != NULL) {
+    cfg->pedantic = 1;
+  } else {
+    cfg->pedantic = 0;
+  }
   cfg->cache_fname = NULL;
   cfg->num_tuning_params = num_tuning_params;
   cfg->tuning_params = malloc(cfg->num_tuning_params * sizeof(int64_t));
@@ -202,8 +207,10 @@ const char* futhark_context_error(struct futhark_context* ctx) {
 
 void futhark_context_reset(struct futhark_context* ctx) {
   if (ctx->cfg->tracing) printf("TRACE: rts: futhark_context_reset: ...\n");
-  free_constants(ctx);
-  init_constants(ctx);
+  if (ctx->cfg->pedantic) {
+    free_constants(ctx);
+    init_constants(ctx);
+  }
   if (ctx->cfg->tracing) printf("TRACE: rts: futhark_context_reset: done\n");
 }
 
