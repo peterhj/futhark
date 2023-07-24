@@ -1,10 +1,11 @@
 // Start of backends/c.h
 
 struct futhark_context_config {
-  int in_use;
-  int debugging;
-  int profiling;
-  int logging;
+  char in_use;
+  char debugging;
+  char profiling;
+  char logging;
+  char tracing;
   const char *cache_fname;
   int num_tuning_params;
   int64_t *tuning_params;
@@ -37,7 +38,6 @@ struct futhark_context {
   int profiling;
   int profiling_paused;
   int logging;
-  int tracing;
   lock_t lock;
   char *error;
   lock_t error_lock;

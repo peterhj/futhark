@@ -31,11 +31,11 @@ static char* get_failure_msg(int failure_idx, int64_t args[]);
 static const int bad = 1;
 
 struct futhark_context_config {
-  int in_use;
-  int debugging;
-  int profiling;
-  int logging;
-  int tracing;
+  char in_use;
+  char debugging;
+  char profiling;
+  char logging;
+  char tracing;
   const char *cache_fname;
   int num_tuning_params;
   int64_t *tuning_params;
