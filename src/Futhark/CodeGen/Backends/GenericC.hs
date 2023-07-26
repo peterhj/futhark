@@ -34,7 +34,7 @@ import Futhark.CodeGen.Backends.GenericC.Fun
 import Futhark.CodeGen.Backends.GenericC.Monad
 import Futhark.CodeGen.Backends.GenericC.Options
 import Futhark.CodeGen.Backends.GenericC.Pretty
-import Futhark.CodeGen.Backends.GenericC.Server (serverDefs)
+import Futhark.CodeGen.Backends.GenericC.Server (serverDefs, miniserverDefs)
 import Futhark.CodeGen.Backends.GenericC.Types
 import Futhark.CodeGen.ImpCode
 import Futhark.CodeGen.RTS.C (cacheH, contextH, contextPrototypesH, errorsH, freeListH, halfH, lockH, timingH, utilH)
@@ -71,6 +71,7 @@ defaultOperations =
       opsReadScalar = defReadScalar,
       opsAllocate = defAllocate,
       opsDeallocate = defDeallocate,
+      opsUnify = defUnify,
       opsCopy = defCopy,
       opsMemoryType = defMemoryType,
       opsCompiler = defCompiler,
@@ -88,6 +89,8 @@ defaultOperations =
       error "Cannot allocate in non-default memory space"
     defDeallocate _ _ =
       error "Cannot deallocate in non-default memory space"
+    defUnify _ _ =
+      error "Cannot unify in non-default memory space"
     defCopy _ destmem destoffset DefaultSpace srcmem srcoffset DefaultSpace size =
       copyMemoryDefaultSpace destmem destoffset srcmem srcoffset size
     defCopy _ _ _ _ _ _ _ _ =
@@ -139,21 +142,33 @@ defineMemorySpace space = do
   let unrefdef =
         [C.cedecl|int $id:(fatMemUnRef space) ($ty:ctx_ty *ctx, $ty:mty *block, const char *desc) {
   if (block->references != NULL) {
+    if (ctx->cfg->tracing) printf("TRACE: rts: memblock_unref: refc=%d mem=0x%016lx size=%lu\n", *(block->references), block->mem, block->size);
     *(block->references) -= 1;
     if (ctx->detail_memory) {
       fprintf(ctx->log, "Unreferencing block %s (allocated as %s) in %s: %d references remaining.\n",
                       desc, block->desc, $string:spacedesc, *(block->references));
     }
+    if (*(block->references) < 0) {
+      printf("WARNING: rts: memblock_unref: refc=%d mem=0x%016lx size=%lu tag=\"%s\" tag2=\"%s\"\n",
+          *(block->references), block->mem, block->size, block->desc, desc);
+    }
     if (*(block->references) == 0) {
-      ctx->$id:usagename -= block->size;
+      if (ctx->cfg->tracing) printf("TRACE: rts: memblock_unref:   refc=0, free...\n");
       $items:free
-      free(block->references);
+      assert(*(block->references + 1) >= 0);
+      if (*(block->references + 1) == 0) {
+        free(block->references);
+      } else {
+        *(block->references + 1) = 0x7fffffff;
+      }
       if (ctx->detail_memory) {
         fprintf(ctx->log, "%lld bytes freed (now allocated: %lld bytes)\n",
                 (long long) block->size, (long long) ctx->$id:usagename);
       }
     }
     block->references = NULL;
+  } else {
+    if (ctx->cfg->tracing) printf("TRACE: rts: memblock_unref: refc=(null)\n");
   }
   return 0;
 }|]
@@ -164,6 +179,7 @@ defineMemorySpace space = do
       allocRawMem [C.cexp|block->mem|] [C.cexp|size|] space [C.cexp|desc|]
   let allocdef =
         [C.cedecl|int $id:(fatMemAlloc space) ($ty:ctx_ty *ctx, $ty:mty *block, typename int64_t size, const char *desc) {
+  if (ctx->cfg->tracing) printf("TRACE: rts: memblock_alloc: req size=%lld\n", size);
   if (size < 0) {
     futhark_panic(1, "Negative allocation of %lld bytes attempted for %s in %s.\n",
           (long long)size, desc, $string:spacedesc, ctx->$id:usagename);
@@ -174,30 +190,23 @@ defineMemorySpace space = do
     return ret;
   }
 
-  long long new_usage = ctx->$id:usagename + size;
   if (ctx->detail_memory) {
-    fprintf(ctx->log, "Allocating %lld bytes for %s in %s (then allocated: %lld bytes)",
+    fprintf(ctx->log, "Allocating %lld bytes for %s in %s.",
             (long long) size,
-            desc, $string:spacedesc,
-            new_usage);
-  }
-  if (new_usage > ctx->$id:peakname) {
-    ctx->$id:peakname = new_usage;
-    if (ctx->detail_memory) {
-      fprintf(ctx->log, " (new peak).\n");
-    }
-  } else if (ctx->detail_memory) {
-    fprintf(ctx->log, ".\n");
+            desc, $string:spacedesc);
   }
 
+  size_t out_size = 0;
   $items:alloc
 
   if (ctx->error == NULL) {
-    block->references = (int*) malloc(sizeof(int));
+    assert(((size_t)size) <= out_size);
+    block->references = (int*) malloc(sizeof(int) * 2UL);
     *(block->references) = 1;
-    block->size = size;
+    *(block->references + 1) = 0;
+    block->size = (size_t)size;
     block->desc = desc;
-    ctx->$id:usagename = new_usage;
+    if (ctx->cfg->tracing) printf("TRACE: rts: memblock_alloc:   success: refc=%d mem=0x%016lx size=%lu\n", *(block->references), block->mem, block->size);
     return FUTHARK_SUCCESS;
   } else {
     // We are naively assuming that any memory allocation error is due to OOM.
@@ -205,26 +214,23 @@ defineMemorySpace space = do
     // glory despite our naiveté.
 
     // We cannot use set_error() here because we want to replace the old error.
-    lock_lock(&ctx->error_lock);
-    char *old_error = ctx->error;
-    ctx->error = msgprintf("Failed to allocate memory in %s.\nAttempted allocation: %12lld bytes\nCurrently allocated:  %12lld bytes\n%s",
-                           $string:spacedesc,
-                           (long long) size,
-                           (long long) ctx->$id:usagename,
-                           old_error);
-    free(old_error);
-    lock_unlock(&ctx->error_lock);
+    //lock_lock(&ctx->error_lock);
+    //lock_unlock(&ctx->error_lock);
+    if (ctx->cfg->tracing) printf("TRACE: rts: memblock_alloc:   oom: size=%lu\n", (size_t)size);
     return FUTHARK_OUT_OF_MEMORY;
   }
   }|]
 
   -- Memory setting - unreference the destination and increase the
   -- count of the source by one.
+  unify <- collect $ unifyRawMem [C.cexp|lhs->desc|] [C.cexp|rhs->desc|] space
   let setdef =
         [C.cedecl|int $id:(fatMemSet space) ($ty:ctx_ty *ctx, $ty:mty *lhs, $ty:mty *rhs, const char *lhs_desc) {
+  if (ctx->cfg->tracing) printf("TRACE: rts: memblock_set: ...\n");
+  $items:unify
   int ret = $id:(fatMemUnRef space)(ctx, lhs, lhs_desc);
   if (rhs->references != NULL) {
-    (*(rhs->references))++;
+    *(rhs->references) += 1;
   }
   *lhs = *rhs;
   return ret;
@@ -270,6 +276,7 @@ data CParts = CParts
     cUtils :: T.Text,
     cCLI :: T.Text,
     cServer :: T.Text,
+    cMiniServer :: T.Text,
     cLib :: T.Text,
     -- | The manifest, in JSON format.
     cJsonManifest :: T.Text
@@ -313,7 +320,7 @@ disableWarnings =
 asLibrary :: CParts -> (T.Text, T.Text, T.Text)
 asLibrary parts =
   ( "#pragma once\n\n" <> cHeader parts,
-    gnuSource <> disableWarnings <> cHeader parts <> cUtils parts <> cLib parts,
+    gnuSource <> disableWarnings <> cHeader parts <> cUtils parts <> cMiniServer parts <> cLib parts,
     cJsonManifest parts
   )
 
@@ -416,6 +423,7 @@ $freeListH
       lib_decls = definitionsText $ DL.toList $ compLibDecls endstate
       clidefs = cliDefs options manifest
       serverdefs = serverDefs options manifest
+      miniserverdefs = miniserverDefs manifest
       libdefs =
         [untrimming|
 #ifdef _MSC_VER
@@ -454,6 +462,7 @@ $entry_point_decls
           cUtils = utildefs,
           cCLI = clidefs,
           cServer = serverdefs,
+          cMiniServer = miniserverdefs,
           cLib = libdefs,
           cJsonManifest = Manifest.manifestToJSON manifest
         },
@@ -576,9 +585,11 @@ generateCommonLibFuns memreport = do
     )
 
   publicDef_ "context_config_set_cache_file" MiscDecl $ \s ->
-    ( [C.cedecl|void $id:s($ty:cfg* cfg, const char *f);|],
-      [C.cedecl|void $id:s($ty:cfg* cfg, const char *f) {
+    ( [C.cedecl|char* $id:s($ty:cfg* cfg, char* f);|],
+      [C.cedecl|char* $id:s($ty:cfg* cfg, char* f) {
+                 char* prev_f = cfg->cache_fname;
                  cfg->cache_fname = f;
+                 return prev_f;
                }|]
     )
 

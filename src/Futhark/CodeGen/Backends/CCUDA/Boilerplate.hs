@@ -42,12 +42,12 @@ profilingEnclosure name =
         pevents = cuda_get_events(ctx,
                                   &ctx->program->$id:(kernelRuns name),
                                   &ctx->program->$id:(kernelRuntime name));
-        CUDA_SUCCEED_FATAL(cuEventRecord(pevents[0], ctx->stream));
+        CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(pevents[0], ctx->stream));
       }
       |],
     [C.citems|
       if (pevents != NULL) {
-        CUDA_SUCCEED_FATAL(cuEventRecord(pevents[1], ctx->stream));
+        CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(pevents[1], ctx->stream));
       }
       |]
   )
@@ -72,7 +72,7 @@ generateCUDADecls cost_centres kernels = do
       (C.toIdent name mempty)
       [C.cty|typename CUfunction|]
       [C.cstm|
-             CUDA_SUCCEED_FATAL(cuModuleGetFunction(
+             CUDA_SUCCEED_FATAL((ctx->cfg->cuModuleGetFunction)(
                                      &ctx->program->$id:name,
                                      ctx->module,
                                      $string:(T.unpack (idText (C.toIdent name mempty)))));|]

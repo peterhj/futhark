@@ -732,6 +732,7 @@ inKernelOperations env mode body =
       GC.opsReadScalar = kernelReadScalar,
       GC.opsAllocate = cannotAllocate,
       GC.opsDeallocate = cannotDeallocate,
+      GC.opsUnify = cannotUnify,
       GC.opsCopy = copyInKernel,
       GC.opsFatMemory = False,
       GC.opsError = errorInKernel,
@@ -864,6 +865,10 @@ inKernelOperations env mode body =
     cannotDeallocate :: GC.Deallocate KernelOp KernelState
     cannotDeallocate _ _ =
       error "Cannot deallocate memory in kernel"
+
+    cannotUnify :: GC.Unify KernelOp KernelState
+    cannotUnify _ _ =
+      error "Cannot unify memory in kernel"
 
     copyInKernel :: GC.Copy KernelOp KernelState
     copyInKernel _ _ _ _ _ _ _ _ =

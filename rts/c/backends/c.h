@@ -1,16 +1,22 @@
 // Start of backends/c.h
 
 struct futhark_context_config {
-  int in_use;
-  int debugging;
-  int profiling;
-  int logging;
+  char in_use;
+  char debugging;
+  char profiling;
+  char logging;
+  char tracing;
+  char pedantic;
   const char *cache_fname;
   int num_tuning_params;
   int64_t *tuning_params;
   const char** tuning_param_names;
   const char** tuning_param_vars;
   const char** tuning_param_classes;
+
+  int (*mem_alloc)(void **, size_t, const char *);
+  int (*mem_free)(void *);
+  void (*mem_unify)(const char *, const char *);
 };
 
 static void backend_context_config_setup(struct futhark_context_config* cfg) {
@@ -50,6 +56,10 @@ int backend_context_setup(struct futhark_context* ctx) {
 }
 
 void backend_context_teardown(struct futhark_context* ctx) {
+  (void)ctx;
+}
+
+void backend_context_release(struct futhark_context* ctx) {
   (void)ctx;
 }
 
