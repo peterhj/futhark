@@ -148,9 +148,19 @@ defineMemorySpace space = do
       fprintf(ctx->log, "Unreferencing block %s (allocated as %s) in %s: %d references remaining.\n",
                       desc, block->desc, $string:spacedesc, *(block->references));
     }
+    if (*(block->references) < 0) {
+      printf("WARNING: rts: memblock_unref: refc=%d mem=0x%016lx size=%lu tag=\"%s\" tag2=\"%s\"\n",
+          *(block->references), block->mem, block->size, block->desc, desc);
+    }
     if (*(block->references) == 0) {
+      if (ctx->cfg->tracing) printf("TRACE: rts: memblock_unref:   refc=0, free...\n");
       $items:free
-      free(block->references);
+      assert(*(block->references + 1) >= 0);
+      if (*(block->references + 1) == 0) {
+        free(block->references);
+      } else {
+        *(block->references + 1) = 0x7fffffff;
+      }
       if (ctx->detail_memory) {
         fprintf(ctx->log, "%lld bytes freed (now allocated: %lld bytes)\n",
                 (long long) block->size, (long long) ctx->$id:usagename);
@@ -190,9 +200,10 @@ defineMemorySpace space = do
   $items:alloc
 
   if (ctx->error == NULL) {
-    // FIXME FIXME: check that size is actually not greater than out_size.
-    block->references = (int*) malloc(sizeof(int));
+    assert(((size_t)size) <= out_size);
+    block->references = (int*) malloc(sizeof(int) * 2UL);
     *(block->references) = 1;
+    *(block->references + 1) = 0;
     block->size = (size_t)size;
     block->desc = desc;
     if (ctx->cfg->tracing) printf("TRACE: rts: memblock_alloc:   success: refc=%d mem=0x%016lx size=%lu\n", *(block->references), block->mem, block->size);
@@ -219,7 +230,7 @@ defineMemorySpace space = do
   $items:unify
   int ret = $id:(fatMemUnRef space)(ctx, lhs, lhs_desc);
   if (rhs->references != NULL) {
-    (*(rhs->references))++;
+    *(rhs->references) += 1;
   }
   *lhs = *rhs;
   return ret;
