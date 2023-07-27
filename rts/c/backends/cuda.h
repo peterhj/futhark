@@ -635,7 +635,7 @@ static char *concat_fragments(const char *src_fragments[]) {
   return src;
 }
 
-static const char *cuda_nvrtc_get_arch(CUdevice dev) {
+static const char *cuda_nvrtc_get_arch(struct futhark_context *ctx, CUdevice dev) {
   static struct {
     int major;
     int minor;
