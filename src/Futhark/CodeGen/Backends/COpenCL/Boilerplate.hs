@@ -45,9 +45,9 @@ failureMsgFunction failures =
       -- FIXME: bogus for non-ints.
       onPart ErrorVal {} = "%lld"
       onFailure i (FailureMsg emsg@(ErrorMsg parts) backtrace) =
-        let msg = concatMap onPart parts ++ "\n" ++ printfEscape backtrace
+        let msg = "Failure: " ++ concatMap onPart parts ++ "\n\nBacktrace:\n%s"
             msgargs = [[C.cexp|args[$int:j]|] | j <- [0 .. errorMsgNumArgs emsg - 1]]
-         in [C.cstm|case $int:i: {return msgprintf($string:msg, $args:msgargs); break;}|]
+         in [C.cstm|case $int:i: {return msgprintf($string:msg, $args:msgargs, $esc:backtrace); break;}|]
       failure_cases =
         zipWith onFailure [(0 :: Int) ..] failures
    in [C.cedecl|static char* get_failure_msg(int failure_idx, typename int64_t args[]) {

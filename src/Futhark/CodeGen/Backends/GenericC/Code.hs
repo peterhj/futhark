@@ -253,7 +253,7 @@ compileCode (Assert e msg (loc, locs)) = do
       asks (opsError . envOperations) <*> pure msg <*> pure stacktrace
   stm [C.cstm|if (!$exp:e') { $items:err }|]
   where
-    stacktrace = T.unpack $ prettyStacktrace 0 $ map locText $ loc : locs
+    stacktrace = T.unpack $ prettyStacktrace2 0 $ map locText2 $ loc : locs
 compileCode (Allocate _ _ ScalarSpace {}) =
   -- Handled by the declaration of the memory block, which is
   -- translated to an actual array.

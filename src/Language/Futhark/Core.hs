@@ -15,6 +15,9 @@ module Language.Futhark.Core
     locText,
     locTextRel,
     prettyStacktrace,
+    locStr2,
+    locText2,
+    prettyStacktrace2,
 
     -- * Name handling
     Name,
@@ -175,6 +178,37 @@ prettyStacktrace cur = T.unlines . zipWith f [(0 :: Int) ..]
         <> (if i > 9 then "" else " ")
         <> " "
         <> x
+
+locStr2 :: Located a => a -> String
+locStr2 a =
+  case locOf a of
+    NoLoc -> "unknown location"
+    Loc (Pos file line1 col1 _) (Pos _ line2 col2 _)
+      -- Do not show line2 if it is identical to line1.
+      | line1 == line2 ->
+          first_part ++ "-" ++ show col2 ++ "\""
+      | otherwise ->
+          first_part ++ "-" ++ show line2 ++ ":" ++ show col2 ++ "\" "
+      where
+        first_part = " FUTHARK_SOURCE_FILE \":" ++ show line1 ++ ":" ++ show col1
+
+locText2 :: Located a => a -> T.Text
+locText2 = T.pack . locStr2
+
+prettyStacktrace2 :: Int -> [T.Text] -> T.Text
+prettyStacktrace2 cur = T.intercalate "" . zipWith f [(0 :: Int) ..]
+  where
+    -- Formatting hack: assume no stack is deeper than 100
+    -- elements.  Since Futhark does not support recursion, going
+    -- beyond that would require a truly perverse program.
+    f i x =
+      (if cur == i then " \"-> " else " \"   ")
+        <> "#"
+        <> showText i
+        <> (if i > 9 then "" else " ")
+        <> " \" "
+        <> x
+        <> " \"\\n\" "
 
 -- | A name tagged with some integer.  Only the integer is used in
 -- comparisons, no matter the type of @vn@.
