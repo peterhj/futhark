@@ -440,8 +440,7 @@ int futhark_context_config_set_tuning_param(struct futhark_context_config *cfg,
 // A record of something that happened.
 struct profiling_record {
   CUevent *events; // Points to two events.
-  int *runs;
-  int64_t *runtime;
+  const char *name;
 };
 
 struct futhark_context {
@@ -985,7 +984,8 @@ static char* cuda_module_setup(struct futhark_context *ctx,
 
 // Count up the runtime all the profiling_records that occured during execution.
 // Also clears the buffer of profiling_records.
-static CUresult cuda_tally_profiling_records(struct futhark_context *ctx) {
+static CUresult cuda_tally_profiling_records(struct futhark_context *ctx,
+                                             struct cost_centres* ccs) {
   CUresult err;
   for (int i = 0; i < ctx->profiling_records_used; i++) {
     struct profiling_record record = ctx->profiling_records[i];
@@ -995,9 +995,15 @@ static CUresult cuda_tally_profiling_records(struct futhark_context *ctx) {
       return err;
     }
 
-    // CUDA provides milisecond resolution, but we want microseconds.
-    *record.runs += 1;
-    *record.runtime += ms*1000;
+    if (ccs) {
+      // CUDA provides milisecond resolution, but we want microseconds.
+      struct cost_centre c = {
+        .name = record.name,
+        .runs = 1,
+        .runtime = ms*1000
+      };
+      cost_centres_add(ccs, c);
+    }
 
     if ((err = (ctx->cfg->cuEventDestroy)(record.events[0])) != CUDA_SUCCESS) {
       return err;
@@ -1010,12 +1016,10 @@ static CUresult cuda_tally_profiling_records(struct futhark_context *ctx) {
   }
 
   ctx->profiling_records_used = 0;
-
-  return CUDA_SUCCESS;
 }
 
 // Returns pointer to two events.
-static CUevent* cuda_get_events(struct futhark_context *ctx, int *runs, int64_t *runtime) {
+static CUevent* cuda_get_events(struct futhark_context *ctx, const char* name) {
   if (ctx->profiling_records_used == ctx->profiling_records_capacity) {
     ctx->profiling_records_capacity *= 2;
     ctx->profiling_records =
@@ -1027,8 +1031,7 @@ static CUevent* cuda_get_events(struct futhark_context *ctx, int *runs, int64_t 
   (ctx->cfg->cuEventCreate)(&events[0], 0);
   (ctx->cfg->cuEventCreate)(&events[1], 0);
   ctx->profiling_records[ctx->profiling_records_used].events = events;
-  ctx->profiling_records[ctx->profiling_records_used].runs = runs;
-  ctx->profiling_records[ctx->profiling_records_used].runtime = runtime;
+  ctx->profiling_records[ctx->profiling_records_used].name = name;
   ctx->profiling_records_used++;
   return events;
 }
@@ -1256,7 +1259,7 @@ void backend_context_teardown(struct futhark_context* ctx) {
   (ctx->cfg->gpu_global_failure_free)(ctx->global_failure);
   CUDA_SUCCEED_FATAL(cuda_free_all(ctx));
   free_list_destroy(&ctx->cu_free_list);
-  (void)cuda_tally_profiling_records(ctx);
+  (void)cuda_tally_profiling_records(ctx, NULL);
   free(ctx->profiling_records);
   CUDA_SUCCEED_FATAL((ctx->cfg->cuModuleUnload)(ctx->module));
   //CUDA_SUCCEED_FATAL(cuStreamDestroy(ctx->stream));
