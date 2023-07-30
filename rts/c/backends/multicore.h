@@ -98,6 +98,11 @@ void backend_context_release(struct futhark_context* ctx) {
   (void)ctx;
 }
 
+int futhark_context_may_fail(struct futhark_context* ctx) {
+  (void)ctx;
+  return 0;
+}
+
 int futhark_context_sync(struct futhark_context* ctx) {
   (void)ctx;
   return 0;

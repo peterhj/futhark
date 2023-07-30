@@ -495,7 +495,7 @@ allocRawMem dest size space desc = case space of
         <*> pure sid
   _ ->
     stm
-      [C.cstm|host_alloc(ctx, (size_t)$exp:size, $exp:desc, (size_t*)&$exp:size, (void*)&$exp:dest);|]
+      [C.cstm|host_alloc(ctx, (size_t)$exp:size, $exp:desc, &out_size, (void*)&$exp:dest);|]
 
 freeRawMem ::
   (C.ToExp a, C.ToExp b, C.ToExp c) =>
