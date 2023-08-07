@@ -401,6 +401,13 @@ genKernelFunction kernel_name safety need_perm arg_params arg_params_inits = do
                 shared_bytes);
         time_start = get_wall_time();
       }
+      if (ctx->cfg->tracing) {
+        printf("TRACE: rts: launch: kernel=\"%s\" grid=[%u, %u, %u] block=[%u, %u, %u] shared=%u\n",
+                $string:(prettyString kernel_name),
+                grid_x, grid_y, grid_z,
+                block_x, block_y, block_z,
+                shared_bytes);
+      }
       $items:bef
       CUDA_SUCCEED_OR_RETURN(
         (ctx->cfg->cuLaunchKernel)(ctx->program->$id:kernel_name,

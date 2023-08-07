@@ -752,12 +752,23 @@ static char* cuda_nvrtc_build(struct futhark_context *ctx, const char *src,
   nvrtcProgram prog;
   char *problem = NULL;
 
+  /*if (ctx->cfg->tracing) {
+    printf("TRACE: rts: cuda_nvrtc_build: src...\n");
+    printf("%s", src);
+    printf("\nTRACE: rts: cuda_nvrtc_build: end src\n");
+  }*/
   problem = NVRTC_SUCCEED_NONFATAL((ctx->cfg->nvrtcCreateProgram)(&prog, src, "futhark-cuda", 0, NULL, NULL));
 
   if (problem) {
     return problem;
   }
 
+  if (ctx->cfg->tracing) {
+    printf("TRACE: rts: cuda_nvrtc_build: n_opts=%lu\n", n_opts);
+    for (size_t i = 0; i < n_opts; i++) {
+      printf("TRACE: rts: cuda_nvrtc_build:   opts[%lu]=\"%s\"\n", i, opts[i]);
+    }
+  }
   nvrtcResult res = (ctx->cfg->nvrtcCompileProgram)(prog, n_opts, opts);
   if (res != NVRTC_SUCCESS) {
     size_t log_size;
@@ -777,6 +788,11 @@ static char* cuda_nvrtc_build(struct futhark_context *ctx, const char *src,
   NVRTC_SUCCEED_FATAL((ctx->cfg->nvrtcGetPTXSize)(prog, &ptx_size));
   *ptx = (char*) malloc(ptx_size);
   NVRTC_SUCCEED_FATAL((ctx->cfg->nvrtcGetPTX)(prog, *ptx));
+  if (ctx->cfg->tracing) {
+    printf("TRACE: rts: cuda_nvrtc_build: ptx size=%lu\n", ptx_size);
+    //printf("%s", ptx);
+    //printf("\nTRACE: rts: cuda_nvrtc_build: end ptx\n");
+  }
 
   NVRTC_SUCCEED_FATAL((ctx->cfg->nvrtcDestroyProgram)(&prog));
 
