@@ -193,7 +193,7 @@ library
       Futhark.CLI.Doc
       Futhark.CLI.Eval
       Futhark.CLI.Literate
-      Futhark.CLI.LSP
+      --Futhark.CLI.LSP
       Futhark.CLI.Main
       Futhark.CLI.Misc
       Futhark.CLI.Multicore
@@ -331,12 +331,12 @@ library
       Futhark.Internalise.Monomorphise
       Futhark.Internalise.ReplaceRecords
       Futhark.Internalise.TypesValues
-      Futhark.LSP.Compile
-      Futhark.LSP.Diagnostic
-      Futhark.LSP.Handlers
-      Futhark.LSP.Tool
-      Futhark.LSP.State
-      Futhark.LSP.PositionMapping
+      --Futhark.LSP.Compile
+      --Futhark.LSP.Diagnostic
+      --Futhark.LSP.Handlers
+      --Futhark.LSP.Tool
+      --Futhark.LSP.State
+      --Futhark.LSP.PositionMapping
       Futhark.MonadFreshNames
       Futhark.Optimise.BlkRegTiling
       Futhark.Optimise.CSE
@@ -496,8 +496,8 @@ library
     , haskeline
     , language-c-quote >= 0.12
     , lens
-    , lsp >= 2.1.0.0
-    , lsp-types >= 2.0.1.0
+    --, lsp >= 2.1.0.0
+    --, lsp-types >= 2.0.1.0
     , mainland-pretty >=0.7.1
     , cmark-gfm >=0.2.1
     , megaparsec >=9.0.0
