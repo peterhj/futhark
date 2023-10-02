@@ -1,16 +1,23 @@
 // Start of backends/multicore.h
 
 struct futhark_context_config {
-  int in_use;
-  int debugging;
-  int profiling;
-  int logging;
+  char in_use;
+  char debugging;
+  char profiling;
+  char logging;
+  char tracing;
+  char pedantic;
   const char *cache_fname;
   int num_tuning_params;
   int64_t *tuning_params;
   const char** tuning_param_names;
   const char** tuning_param_vars;
   const char** tuning_param_classes;
+
+  int (*mem_alloc)(void **, size_t, const char *);
+  int (*mem_free)(void *);
+  void (*mem_unify)(const char *, const char *);
+
   // Uniform fields above.
 
   int num_threads;
@@ -85,6 +92,15 @@ int backend_context_setup(struct futhark_context* ctx) {
 
 void backend_context_teardown(struct futhark_context* ctx) {
   (void)scheduler_destroy(&ctx->scheduler);
+}
+
+void backend_context_release(struct futhark_context* ctx) {
+  (void)ctx;
+}
+
+int futhark_context_may_fail(struct futhark_context* ctx) {
+  (void)ctx;
+  return 0;
 }
 
 int futhark_context_sync(struct futhark_context* ctx) {

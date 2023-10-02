@@ -129,26 +129,37 @@ void free_builtin_kernels(struct futhark_context* ctx, struct builtin_kernels* k
   free(kernels);
 }
 
-static int gpu_alloc(struct futhark_context *ctx, FILE *log,
+static void gpu_unify(struct futhark_context *ctx,
+                      const char *ltag, const char *rtag) {
+  gpu_unify_actual(ctx, ltag, rtag);
+}
+
+static int gpu_alloc(struct futhark_context *ctx,
                      size_t min_size, const char *tag,
                      gpu_mem *mem_out, size_t *size_out) {
   if (min_size < sizeof(int)) {
     min_size = sizeof(int);
   }
 
-  gpu_mem* memptr;
-  if (free_list_find(&ctx->gpu_free_list, min_size, tag, size_out, (fl_mem*)&memptr) == 0) {
+  gpu_mem* memptr = NULL;
+  size_t size_found = 0;
+  const char *tag_found = NULL;
+  if (free_list_find(&ctx->gpu_free_list, min_size, tag, &size_found, (fl_mem*)&memptr, &tag_found) == 0) {
+    if (ctx->cfg->tracing) printf("TRACE: rts: gpu_alloc: found free block: min_size=%lu size=%lu\n", min_size, *size_out);
     // Successfully found a free block.  Is it big enough?
     if (*size_out >= min_size) {
       if (ctx->cfg->debugging) {
-        fprintf(log, "No need to allocate: Found a block in the free list.\n");
+        fprintf(ctx->log, "No need to allocate: Found a block in the free list.\n");
       }
+      gpu_unify(ctx, tag, tag_found);
+      *size_out = size_found;
       *mem_out = *memptr;
       free(memptr);
+      if (ctx->cfg->tracing) printf("TRACE: rts: gpu_alloc:   return free block\n");
       return FUTHARK_SUCCESS;
     } else {
       if (ctx->cfg->debugging) {
-        fprintf(log, "Found a free block, but it was too small.\n");
+        fprintf(ctx->log, "Found a free block, but it was too small.\n");
       }
       int error = gpu_free_actual(ctx, *memptr);
       free(memptr);
@@ -169,14 +180,14 @@ static int gpu_alloc(struct futhark_context *ctx, FILE *log,
   // expensive.  Let's hope that this case is hit rarely.
 
   if (ctx->cfg->debugging) {
-    fprintf(log, "Actually allocating the desired block.\n");
+    fprintf(ctx->log, "Actually allocating the desired block.\n");
   }
 
-  int error = gpu_alloc_actual(ctx, min_size, mem_out);
+  int error = gpu_alloc_actual(ctx, min_size, tag, mem_out);
 
   while (error == FUTHARK_OUT_OF_MEMORY) {
     if (ctx->cfg->debugging) {
-      fprintf(log, "Out of GPU memory: releasing entry from the free list...\n");
+      fprintf(ctx->log, "Out of GPU memory: releasing entry from the free list...\n");
     }
     gpu_mem* memptr;
     if (free_list_first(&ctx->gpu_free_list, (fl_mem*)&memptr) == 0) {
@@ -189,7 +200,7 @@ static int gpu_alloc(struct futhark_context *ctx, FILE *log,
     } else {
       break;
     }
-    error = gpu_alloc_actual(ctx, min_size, mem_out);
+    error = gpu_alloc_actual(ctx, min_size, tag, mem_out);
   }
 
   return error;

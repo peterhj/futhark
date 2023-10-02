@@ -139,10 +139,11 @@ compileProg version prog = do
     operations =
       gpuOperations
         { GC.opsMemoryType = cudaMemoryType,
-          GC.opsCritical =
-            ( [C.citems|CUDA_SUCCEED_FATAL(cuCtxPushCurrent(ctx->cu_ctx));|],
-              [C.citems|CUDA_SUCCEED_FATAL(cuCtxPopCurrent(&ctx->cu_ctx));|]
-            )
+          --GC.opsCritical =
+          --  ( [C.citems|CUDA_SUCCEED_FATAL((ctx->cfg->cuCtxPushCurrent)(ctx->cu_ctx));|],
+          --    [C.citems|CUDA_SUCCEED_FATAL((ctx->cfg->cuCtxPopCurrent)(&ctx->cu_ctx));|]
+          --  )
+          GC.opsCritical = mempty
         }
     cuda_includes =
       [untrimming|

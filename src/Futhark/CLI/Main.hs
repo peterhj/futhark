@@ -18,7 +18,7 @@ import Futhark.CLI.Dev qualified as Dev
 import Futhark.CLI.Doc qualified as Doc
 import Futhark.CLI.Eval qualified as Eval
 import Futhark.CLI.HIP qualified as HIP
-import Futhark.CLI.LSP qualified as LSP
+--import Futhark.CLI.LSP qualified as LSP
 import Futhark.CLI.Literate qualified as Literate
 import Futhark.CLI.Misc qualified as Misc
 import Futhark.CLI.Multicore qualified as Multicore
@@ -78,7 +78,7 @@ commands =
       ("defs", (Defs.main, "Show location and name of all definitions.")),
       ("query", (Query.main, "Query semantic information about program.")),
       ("literate", (Literate.main, "Process a literate Futhark program.")),
-      ("lsp", (LSP.main, "Run LSP server.")),
+      --("lsp", (LSP.main, "Run LSP server.")),
       ("thanks", (Misc.mainThanks, "Express gratitude.")),
       ("tokens", (Misc.mainTokens, "Print tokens from Futhark file.")),
       ("benchcmp", (Benchcmp.main, "Compare two benchmark results."))

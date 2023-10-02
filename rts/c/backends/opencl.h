@@ -118,16 +118,23 @@ static char* opencl_succeed_nonfatal(cl_int ret,
 }
 
 struct futhark_context_config {
-  int in_use;
-  int debugging;
-  int profiling;
-  int logging;
+  char in_use;
+  char debugging;
+  char profiling;
+  char logging;
+  char tracing;
+  char pedantic;
   const char *cache_fname;
   int num_tuning_params;
   int64_t *tuning_params;
   const char** tuning_param_names;
   const char** tuning_param_vars;
   const char** tuning_param_classes;
+
+  int (*mem_alloc)(void **, size_t, const char *);
+  int (*mem_free)(void *);
+  void (*mem_unify)(const char *, const char *);
+
   // Uniform fields above.
 
   char* program;
@@ -1098,6 +1105,11 @@ void backend_context_teardown(struct futhark_context* ctx) {
   (void)clReleaseProgram(ctx->clprogram);
   (void)clReleaseCommandQueue(ctx->queue);
   (void)clReleaseContext(ctx->ctx);
+}
+
+void backend_context_release(struct futhark_context* ctx) {
+  // FIXME FIXME
+  (void)ctx;
 }
 
 cl_command_queue futhark_context_get_command_queue(struct futhark_context* ctx) {

@@ -252,6 +252,13 @@ deallocateGPU mem size tag "device" =
 deallocateGPU _ _ _ space =
   error $ "Cannot deallocate in '" ++ space ++ "' space"
 
+unifyGPU :: GC.Unify op ()
+unifyGPU ltag rtag "device" =
+  GC.stm
+    [C.cstm|gpu_unify(ctx, $exp:ltag, $exp:rtag);|]
+unifyGPU _ _ space =
+  error $ "Cannot unify in '" ++ space ++ "' memory space."
+
 -- It is often faster to do a blocking clEnqueueReadBuffer() than to
 -- do an async clEnqueueReadBuffer() followed by a clFinish(), even
 -- with an in-order command queue.  This is safe if and only if there
@@ -305,6 +312,7 @@ gpuOperations =
       GC.opsReadScalar = readScalarGPU,
       GC.opsAllocate = allocateGPU,
       GC.opsDeallocate = deallocateGPU,
+      GC.opsUnify = unifyGPU,
       GC.opsCopy = copyGPU,
       GC.opsCopies = gpuCopies <> GC.opsCopies GC.defaultOperations,
       GC.opsFatMemory = True

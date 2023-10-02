@@ -16,6 +16,7 @@ module Futhark.CodeGen.Backends.GenericC.Monad
     readScalarPointerWithQuals,
     Allocate,
     Deallocate,
+    Unify,
     CopyBarrier (..),
     Copy,
     DoLMADCopy,
@@ -54,6 +55,7 @@ module Futhark.CodeGen.Backends.GenericC.Monad
     rawMemCType,
     freeRawMem,
     allocRawMem,
+    unifyRawMem,
     fatMemType,
     declAllocatedMem,
     freeAllocatedMem,
@@ -181,6 +183,9 @@ type Allocate op s =
 -- given size,, which is in the given memory space.
 type Deallocate op s = C.Exp -> C.Exp -> C.Exp -> SpaceId -> CompilerM op s ()
 
+-- | Unify the two given tags, which are in the given memory space.
+type Unify op s = C.Exp -> C.Exp -> SpaceId -> CompilerM op s ()
+
 -- | Whether a copying operation should implicitly function as a
 -- barrier regarding further operations on the source.  This is a
 -- rather subtle detail and is mostly useful for letting some
@@ -228,6 +233,7 @@ data Operations op s = Operations
     opsReadScalar :: ReadScalar op s,
     opsAllocate :: Allocate op s,
     opsDeallocate :: Deallocate op s,
+    opsUnify :: Unify op s,
     opsCopy :: Copy op s,
     opsMemoryType :: MemoryType op s,
     opsCompiler :: OpCompiler op s,
@@ -508,7 +514,7 @@ allocRawMem dest size space desc = case space of
         <*> pure sid
   _ ->
     stm
-      [C.cstm|host_alloc(ctx, (size_t)$exp:size, $exp:desc, (size_t*)&$exp:size, (void*)&$exp:dest);|]
+      [C.cstm|host_alloc(ctx, (size_t)$exp:size, $exp:desc, &out_size, (void*)&$exp:dest);|]
 
 freeRawMem ::
   (C.ToExp a, C.ToExp b, C.ToExp c) =>
@@ -526,6 +532,23 @@ freeRawMem mem size space desc =
       item
         [C.citem|host_free(ctx, (size_t)$exp:size, $exp:desc, (void*)$exp:mem);|]
 
+unifyRawMem ::
+  (C.ToExp a, C.ToExp b) =>
+  a ->
+  b ->
+  Space ->
+  CompilerM op s ()
+unifyRawMem lhs_desc rhs_desc space = case space of
+  Space sid ->
+    join $
+      asks (opsUnify . envOperations)
+        <*> pure [C.cexp|$exp:lhs_desc|]
+        <*> pure [C.cexp|$exp:rhs_desc|]
+        <*> pure sid
+  _ ->
+    stm
+      [C.cstm|host_unify(ctx, $exp:lhs_desc, $exp:rhs_desc);|]
+
 declMem :: VName -> Space -> CompilerM op s ()
 declMem name space = do
   cached <- isJust <$> cacheMem name
@@ -541,11 +564,13 @@ resetMem :: (C.ToExp a) => a -> Space -> CompilerM op s ()
 resetMem mem space = do
   refcount <- fatMemory space
   cached <- isJust <$> cacheMem mem
+  let mem_s = T.unpack $ expText $ C.toExp mem noLoc
   if cached
     then stm [C.cstm|$exp:mem = NULL;|]
     else
       when refcount $
-        stm [C.cstm|$exp:mem.references = NULL;|]
+        stms [C.cstms|$exp:mem.references = NULL;
+                      $exp:mem.desc = $string:mem_s;|]
 
 setMem :: (C.ToExp a, C.ToExp b) => a -> b -> Space -> CompilerM op s ()
 setMem dest src space = do
@@ -673,11 +698,9 @@ readScalarPointerWithQuals quals_f dest i elemtype space vol = do
 
 criticalSection :: Operations op s -> [C.BlockItem] -> [C.BlockItem]
 criticalSection ops x =
-  [C.citems|lock_lock(&ctx->lock);
-            $items:(fst (opsCritical ops))
+  [C.citems|$items:(fst (opsCritical ops))
             $items:x
             $items:(snd (opsCritical ops))
-            lock_unlock(&ctx->lock);
            |]
 
 -- | The generated code must define a context struct with this name.

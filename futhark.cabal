@@ -56,6 +56,7 @@ extra-source-files:
     rts/c/half.h
     rts/c/cache.h
     rts/c/ispc_util.h
+    rts/c/miniserver.h
     rts/c/scalar.h
     rts/c/scalar_f16.h
     rts/c/scheduler.h
@@ -201,7 +202,7 @@ library
       Futhark.CLI.Eval
       Futhark.CLI.HIP
       Futhark.CLI.Literate
-      Futhark.CLI.LSP
+      --Futhark.CLI.LSP
       Futhark.CLI.Main
       Futhark.CLI.Misc
       Futhark.CLI.Multicore
@@ -340,12 +341,12 @@ library
       Futhark.Internalise.Monomorphise
       Futhark.Internalise.ReplaceRecords
       Futhark.Internalise.TypesValues
-      Futhark.LSP.Compile
-      Futhark.LSP.Diagnostic
-      Futhark.LSP.Handlers
-      Futhark.LSP.Tool
-      Futhark.LSP.State
-      Futhark.LSP.PositionMapping
+      --Futhark.LSP.Compile
+      --Futhark.LSP.Diagnostic
+      --Futhark.LSP.Handlers
+      --Futhark.LSP.Tool
+      --Futhark.LSP.State
+      --Futhark.LSP.PositionMapping
       Futhark.MonadFreshNames
       Futhark.Optimise.BlkRegTiling
       Futhark.Optimise.CSE
@@ -505,8 +506,8 @@ library
     , haskeline
     , language-c-quote >= 0.12
     , lens
-    , lsp >= 2.2.0.0
-    , lsp-types >= 2.0.1.0
+    --, lsp >= 2.2.0.0
+    --, lsp-types >= 2.0.1.0
     , mainland-pretty >=0.7.1
     , cmark-gfm >=0.2.1
     , megaparsec >=9.0.0
@@ -531,7 +532,7 @@ library
     , prettyprinter >= 1.7
     , prettyprinter-ansi-terminal >= 1.1
 
-executable futhark
+executable cacti-futhark
   import: common
   main-is: src/main.hs
   ghc-options: -threaded -rtsopts "-with-rtsopts=-maxN16 -qg1 -A16M"
