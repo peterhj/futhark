@@ -49,4 +49,6 @@ static int backend_context_setup(struct futhark_context *ctx);
 static void backend_context_teardown(struct futhark_context *ctx);
 static void backend_context_release(struct futhark_context *ctx);
 
+int futhark_context_trace(struct futhark_context *ctx);
+
 // End of of context_prototypes.h

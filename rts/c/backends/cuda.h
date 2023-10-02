@@ -73,9 +73,9 @@ struct futhark_context_config {
   CUdevice setup_dev;
   CUstream setup_stream;
 
+  void (*gpu_unify)(const char *, const char *);
   int (*gpu_alloc)(CUdeviceptr *, size_t, const char *);
   int (*gpu_free)(CUdeviceptr);
-  void (*gpu_unify)(const char *, const char *);
   int (*gpu_global_failure_alloc)(CUdeviceptr *, size_t);
   int (*gpu_global_failure_free)(CUdeviceptr);
 
@@ -1190,7 +1190,7 @@ void backend_context_teardown(struct futhark_context* ctx) {
 
 void backend_context_release(struct futhark_context* ctx) {
   if (ctx->cfg->tracing) printf("TRACE: rts: cuda: backend_context_release: ...\n");
-  CUDA_SUCCEED_FATAL(cuda_free_all(ctx));
+  CUDA_SUCCEED_FATAL(gpu_free_all(ctx));
   //free_list_destroy(&ctx->gpu_free_list);
   //free_list_init(&ctx->gpu_free_list);
   if (ctx->cfg->tracing) printf("TRACE: rts: cuda: backend_context_release: done\n");
@@ -1257,7 +1257,7 @@ static int gpu_memcpy(struct futhark_context* ctx,
     pevents = cuda_get_events(ctx, "copy_dev_to_dev");
     CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(pevents[0], ctx->stream));
   }
-  CUDA_SUCCEED_OR_RETURN((ctx->cfg->cuMemcpyAsync)(dst+dst_offset, src+src_offset, nbytes));
+  CUDA_SUCCEED_OR_RETURN((ctx->cfg->cuMemcpyAsync)(dst+dst_offset, src+src_offset, nbytes, ctx->stream));
   if (pevents != NULL) {
     CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(pevents[1], ctx->stream));
   }
@@ -1276,7 +1276,7 @@ static int memcpy_host2gpu(struct futhark_context* ctx, bool sync,
     }
     if (sync) {
       CUDA_SUCCEED_OR_RETURN
-        ((ctx->cfg->cuStreamSynchronize)(stream));
+        ((ctx->cfg->cuStreamSynchronize)(ctx->stream));
       CUDA_SUCCEED_OR_RETURN
         ((ctx->cfg->cuMemcpyHtoD)(dst + dst_offset, src + src_offset, nbytes));
     } else {
@@ -1302,7 +1302,7 @@ static int memcpy_gpu2host(struct futhark_context* ctx, bool sync,
     }
     if (sync) {
       CUDA_SUCCEED_OR_RETURN
-        ((ctx->cfg->cuStreamSynchronize)(stream));
+        ((ctx->cfg->cuStreamSynchronize)(ctx->stream));
       CUDA_SUCCEED_OR_RETURN
         ((ctx->cfg->cuMemcpyDtoH)(dst + dst_offset, src + src_offset, nbytes));
     } else {
@@ -1376,11 +1376,11 @@ static int gpu_launch_kernel(struct futhark_context* ctx,
 }
 
 static void gpu_unify_actual(struct futhark_context *ctx, const char *ltag, const char *rtag) {
-  (ctx->cfg->gpu_mem_unify)(ltag, rtag);
+  (ctx->cfg->gpu_unify)(ltag, rtag);
 }
 
 static int gpu_alloc_actual(struct futhark_context *ctx, size_t size, const char *tag, gpu_mem *mem_out) {
-  CUresult res = (ctx->cfg->gpu_mem_alloc)(mem_out, size, tag);
+  CUresult res = (ctx->cfg->gpu_alloc)(mem_out, size, tag);
   if (ctx->cfg->tracing) printf("TRACE: rts: gpu_alloc_actual: dptr=0x%016lx size=%lu res=%d\n", (*mem_out), size, res);
   if (res == CUDA_ERROR_OUT_OF_MEMORY) {
     return FUTHARK_OUT_OF_MEMORY;
@@ -1391,7 +1391,7 @@ static int gpu_alloc_actual(struct futhark_context *ctx, size_t size, const char
 
 static int gpu_free_actual(struct futhark_context *ctx, gpu_mem mem) {
   if (ctx->cfg->tracing) printf("TRACE: rts: gpu_free_actual: dptr=0x%016lx\n", mem);
-  CUresult res = (ctx->cfg->gpu_mem_free)(mem);
+  CUresult res = (ctx->cfg->gpu_free)(mem);
   CUDA_SUCCEED_OR_RETURN(res);
   return FUTHARK_SUCCESS;
 }

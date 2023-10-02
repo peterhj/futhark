@@ -225,6 +225,7 @@ defineMemorySpace space = do
   $items:alloc
 
   if (ctx->error == NULL) {
+    if (ctx->cfg->tracing) printf("TRACE: rts: memblock_alloc:   alloc:   size=%lu out size=%lu\n", (size_t)size, out_size);
     assert(((size_t)size) <= out_size);
     block->references = (int*) malloc(sizeof(int) * 2UL);
     *(block->references) = 1;
