@@ -179,10 +179,10 @@ prettyStacktrace cur = T.unlines . zipWith f [(0 :: Int) ..]
         <> " "
         <> x
 
-locStr2 :: Located a => a -> String
+locStr2 :: (Located a) => a -> String
 locStr2 a =
   case locOf a of
-    NoLoc -> "unknown location"
+    NoLoc -> " \"unknown location\" "
     Loc (Pos file line1 col1 _) (Pos _ line2 col2 _)
       -- Do not show line2 if it is identical to line1.
       | line1 == line2 ->
@@ -192,7 +192,7 @@ locStr2 a =
       where
         first_part = " FUTHARK_SOURCE_FILE \":" ++ show line1 ++ ":" ++ show col1
 
-locText2 :: Located a => a -> T.Text
+locText2 :: (Located a) => a -> T.Text
 locText2 = T.pack . locStr2
 
 prettyStacktrace2 :: Int -> [T.Text] -> T.Text

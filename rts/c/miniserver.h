@@ -12,4 +12,6 @@ struct futhark_prog {
   struct entry_point *entry_points;
 };
 
+int futhark_context_trace(struct futhark_context *ctx);
+
 // End of miniserver.h.

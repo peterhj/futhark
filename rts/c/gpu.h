@@ -211,11 +211,8 @@ static int gpu_alloc(struct futhark_context *ctx,
 
 static int gpu_free(struct futhark_context *ctx,
                     gpu_mem mem, size_t size, const char *tag) {
-  //gpu_mem* memptr = malloc(sizeof(gpu_mem));
-  //*memptr = mem;
-  //free_list_insert(&ctx->gpu_free_list, size, (fl_mem)memptr, tag);
-  free_list_insert(&ctx->gpu_free_list, size, (fl_mem)mem, tag);
-  return FUTHARK_SUCCESS;
+  int error = gpu_free_actual(ctx, mem);
+  return error;
 }
 
 static int gpu_free_all(struct futhark_context *ctx) {
