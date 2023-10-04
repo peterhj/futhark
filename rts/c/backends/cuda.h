@@ -475,7 +475,7 @@ struct futhark_context {
 
   CUmodule module;
 
-  struct free_list gpu_free_list;
+  //struct free_list gpu_free_list;
 
   size_t max_group_size;
   size_t max_grid_size;
@@ -1141,7 +1141,7 @@ int backend_context_setup(struct futhark_context* ctx) {
   //CUDA_SUCCEED_FATAL(cuCtxCreate(&ctx->cu_ctx, 0, ctx->dev));
   CUDA_SUCCEED_FATAL((ctx->cfg->cuDevicePrimaryCtxRetain)(&ctx->cu_ctx, ctx->dev));
 
-  free_list_init(&ctx->gpu_free_list);
+  //free_list_init(&ctx->gpu_free_list);
 
   ctx->max_local_memory = device_query(ctx->dev, MAX_SHARED_MEMORY_PER_BLOCK);
   ctx->max_group_size = device_query(ctx->dev, MAX_THREADS_PER_BLOCK);
@@ -1178,8 +1178,8 @@ int backend_context_setup(struct futhark_context* ctx) {
 void backend_context_teardown(struct futhark_context* ctx) {
   free_builtin_kernels(ctx, ctx->kernels);
   (ctx->cfg->gpu_global_failure_free)(ctx->global_failure);
-  CUDA_SUCCEED_FATAL(gpu_free_all(ctx));
-  free_list_destroy(&ctx->gpu_free_list);
+  //CUDA_SUCCEED_FATAL(gpu_free_all(ctx));
+  //free_list_destroy(&ctx->gpu_free_list);
   (void)tally_profiling_records(ctx, NULL);
   free(ctx->profiling_records);
   CUDA_SUCCEED_FATAL((ctx->cfg->cuModuleUnload)(ctx->module));
@@ -1190,7 +1190,7 @@ void backend_context_teardown(struct futhark_context* ctx) {
 
 void backend_context_release(struct futhark_context* ctx) {
   if (ctx->cfg->tracing) printf("TRACE: rts: cuda: backend_context_release: ...\n");
-  CUDA_SUCCEED_FATAL(gpu_free_all(ctx));
+  //CUDA_SUCCEED_FATAL(gpu_free_all(ctx));
   //free_list_destroy(&ctx->gpu_free_list);
   //free_list_init(&ctx->gpu_free_list);
   if (ctx->cfg->tracing) printf("TRACE: rts: cuda: backend_context_release: done\n");
@@ -1389,8 +1389,8 @@ static int gpu_alloc_actual(struct futhark_context *ctx, size_t size, const char
   return FUTHARK_SUCCESS;
 }
 
-static int gpu_free_actual(struct futhark_context *ctx, gpu_mem mem) {
-  if (ctx->cfg->tracing) printf("TRACE: rts: gpu_free_actual: dptr=0x%016lx\n", mem);
+static int gpu_free_actual(struct futhark_context *ctx, gpu_mem mem, size_t size, const char *tag) {
+  if (ctx->cfg->tracing) printf("TRACE: rts: gpu_free_actual: dptr=0x%016lx size=%lu\n", mem, size);
   CUresult res = (ctx->cfg->gpu_free)(mem);
   CUDA_SUCCEED_OR_RETURN(res);
   return FUTHARK_SUCCESS;
