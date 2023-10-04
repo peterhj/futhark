@@ -642,7 +642,7 @@ compileCode (Assert e msg (loc, locs)) = do
   err <- GC.collect $ handleError msg stacktrace
   GC.stm [C.cstm|if (!$exp:e') { $items:err }|]
   where
-    stacktrace = T.unpack $ prettyStacktrace 0 $ map locText $ loc : locs
+    stacktrace = T.unpack $ prettyStacktrace2 0 $ map locText2 $ loc : locs
 compileCode code =
   GC.compileCode code
 
