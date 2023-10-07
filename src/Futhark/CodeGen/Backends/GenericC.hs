@@ -633,11 +633,11 @@ generateCommonLibFuns memreport = do
     )
 
   publicDef_ "context_config_set_cache_file" MiscDecl $ \s ->
-    ( [C.cedecl|char* $id:s($ty:cfg* cfg, char* f);|],
-      [C.cedecl|char* $id:s($ty:cfg* cfg, char* f) {
-                 char* prev_f = cfg->cache_fname;
-                 cfg->cache_fname = f;
-                 return prev_f;
+    ( [C.cedecl|char *$id:s($ty:cfg* cfg, const char *f);|],
+      [C.cedecl|char *$id:s($ty:cfg* cfg, const char *f) {
+                 char *prev_fname = cfg->cache_fname;
+                 cfg->cache_fname = strdup(f);
+                 return prev_fname;
                }|]
     )
 

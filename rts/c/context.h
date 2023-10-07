@@ -116,6 +116,7 @@ void futhark_context_config_free(struct futhark_context_config* cfg) {
   if (tracing) printf("TRACE: rts: futhark_context_config_free: ...\n");
   assert(!cfg->in_use);
   backend_context_config_teardown(cfg);
+  free(cfg->cache_fname);
   free(cfg->tuning_params);
   free(cfg);
   if (tracing) printf("TRACE: rts: futhark_context_config_free: done\n");
@@ -187,11 +188,13 @@ void futhark_context_free(struct futhark_context* ctx) {
   free_list_destroy(&ctx->free_list);
   if (cfg->tracing) printf("TRACE: rts: futhark_context_free: free constants...\n");
   free(ctx->constants);
+  if (cfg->tracing) printf("TRACE: rts: futhark_context_free: free error...\n");
+  free(ctx->error);
   //if (cfg->tracing) printf("TRACE: rts: futhark_context_free: free locks...\n");
   //free_lock(&ctx->lock);
   //free_lock(&ctx->error_lock);
   if (cfg->tracing) printf("TRACE: rts: futhark_context_free: unset cfg in_use...\n");
-  cfg->in_use = 0;
+  ctx->cfg->in_use = 0;
   if (cfg->tracing) printf("TRACE: rts: futhark_context_free: free ctx...\n");
   free(ctx);
   if (cfg->tracing) printf("TRACE: rts: futhark_context_free: done\n");

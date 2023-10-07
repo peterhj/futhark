@@ -9,11 +9,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Added
 
+* The various C API functions that accept strings now perform a copy,
+  meaning the caller does not have to keep the strings alive.
+
+* Slightly better lexer error messages.
+
 ### Removed
 
 ### Changed
 
 ### Fixed
+
+* Inefficient locking for certain segmented histograms (#2024).
 
 ## [0.25.5]
 
