@@ -533,7 +533,7 @@ struct futhark_context {
   cl_command_queue queue;
   cl_program clprogram;
 
-  struct free_list gpu_free_list;
+  //struct free_list gpu_free_list;
 
   size_t max_group_size;
   size_t max_num_groups;
@@ -742,7 +742,7 @@ static void setup_opencl_with_command_queue(struct futhark_context *ctx,
                                             const char* cache_fname) {
   int error;
 
-  free_list_init(&ctx->gpu_free_list);
+  //free_list_init(&ctx->gpu_free_list);
   ctx->queue = queue;
 
   OPENCL_SUCCEED_FATAL(clGetCommandQueueInfo(ctx->queue, CL_QUEUE_CONTEXT, sizeof(cl_context), &ctx->ctx, NULL));
@@ -1105,22 +1105,20 @@ int backend_context_setup(struct futhark_context* ctx) {
   return FUTHARK_SUCCESS;
 }
 
-static int gpu_free_all(struct futhark_context *ctx);
-
 void backend_context_teardown(struct futhark_context* ctx) {
   free_builtin_kernels(ctx, ctx->kernels);
   OPENCL_SUCCEED_FATAL(clReleaseMemObject(ctx->global_failure));
   OPENCL_SUCCEED_FATAL(clReleaseMemObject(ctx->global_failure_args));
+  //(void)gpu_free_all(ctx);
+  //free_list_destroy(&ctx->gpu_free_list);
   (void)tally_profiling_records(ctx, NULL);
   free(ctx->profiling_records);
-  (void)gpu_free_all(ctx);
   (void)clReleaseProgram(ctx->clprogram);
   (void)clReleaseCommandQueue(ctx->queue);
   (void)clReleaseContext(ctx->ctx);
 }
 
 void backend_context_release(struct futhark_context* ctx) {
-  // FIXME FIXME
   (void)ctx;
 }
 

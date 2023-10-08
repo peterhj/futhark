@@ -260,7 +260,7 @@ struct futhark_context {
   hipModule_t module;
   hipStream_t stream;
 
-  struct free_list gpu_free_list;
+  //struct free_list gpu_free_list;
 
   size_t max_group_size;
   size_t max_grid_size;
@@ -678,7 +678,7 @@ int backend_context_setup(struct futhark_context* ctx) {
     futhark_panic(-1, "No suitable HIP device found.\n");
   }
 
-  free_list_init(&ctx->gpu_free_list);
+  //free_list_init(&ctx->gpu_free_list);
 
   ctx->max_local_memory = device_query(ctx->dev, hipDeviceAttributeMaxSharedMemoryPerBlock);
   ctx->max_group_size = device_query(ctx->dev, hipDeviceAttributeMaxThreadsPerBlock);
@@ -721,11 +721,16 @@ void backend_context_teardown(struct futhark_context* ctx) {
   free_builtin_kernels(ctx, ctx->kernels);
   hipFree(ctx->global_failure);
   hipFree(ctx->global_failure_args);
-  HIP_SUCCEED_FATAL(gpu_free_all(ctx));
+  //HIP_SUCCEED_FATAL(gpu_free_all(ctx));
+  //free_list_destroy(&ctx->gpu_free_list);
   (void)tally_profiling_records(ctx, NULL);
   free(ctx->profiling_records);
   HIP_SUCCEED_FATAL(hipStreamDestroy(ctx->stream));
   HIP_SUCCEED_FATAL(hipModuleUnload(ctx->module));
+}
+
+void backend_context_release(struct futhark_context* ctx) {
+  (void)ctx;
 }
 
 // GPU ABSTRACTION LAYER
