@@ -5,6 +5,8 @@
 
 PREFIX?=$(HOME)/.local
 
+UNAME:=$(shell uname)
+
 # Disable all implicit rules.
 .SUFFIXES:
 
@@ -25,7 +27,8 @@ dev-build:
 	cabal build
 
 dev-install: dev-build
-	install -D "$$(cabal -v0 list-bin exe:cacti-futhark)" $(PREFIX)/bin/cacti-futhark
+	install -d $(PREFIX)/bin/
+	install "$$(cabal -v0 list-bin exe:cacti-futhark)" $(PREFIX)/bin/cacti-futhark
 
 build: install
 

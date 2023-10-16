@@ -41,7 +41,6 @@ module Futhark.CodeGen.Backends.GenericC.Monad
     headerDecl,
     publicDef,
     publicDef_,
-    profileReport,
     onClear,
     HeaderSection (..),
     libDecl,
@@ -113,7 +112,6 @@ data CompilerState s = CompilerState
     compHeaderDecls :: M.Map HeaderSection (DL.DList C.Definition),
     compLibDecls :: DL.DList C.Definition,
     compCtxFields :: DL.DList (C.Id, C.Type, Maybe C.Exp, Maybe (C.Stm, C.Stm)),
-    compProfileItems :: DL.DList C.BlockItem,
     compClearItems :: DL.DList C.BlockItem,
     compDeclaredMem :: [(VName, Space)],
     compItems :: DL.DList C.BlockItem
@@ -129,7 +127,6 @@ newCompilerState src s =
       compHeaderDecls = mempty,
       compLibDecls = mempty,
       compCtxFields = mempty,
-      compProfileItems = mempty,
       compClearItems = mempty,
       compDeclaredMem = mempty,
       compItems = mempty
@@ -428,10 +425,6 @@ contextField name ty initial = modify $ \s ->
 contextFieldDyn :: C.Id -> C.Type -> C.Stm -> C.Stm -> CompilerM op s ()
 contextFieldDyn name ty create free = modify $ \s ->
   s {compCtxFields = compCtxFields s <> DL.singleton (name, ty, Nothing, Just (create, free))}
-
-profileReport :: C.BlockItem -> CompilerM op s ()
-profileReport x = modify $ \s ->
-  s {compProfileItems = compProfileItems s <> DL.singleton x}
 
 onClear :: C.BlockItem -> CompilerM op s ()
 onClear x = modify $ \s ->

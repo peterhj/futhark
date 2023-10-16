@@ -7,7 +7,7 @@ struct futhark_context_config {
   char logging;
   char tracing;
   char pedantic;
-  const char *cache_fname;
+  char *cache_fname;
   int num_tuning_params;
   int64_t *tuning_params;
   const char** tuning_param_names;
@@ -53,11 +53,13 @@ struct futhark_context {
   FILE *log;
   struct constants *constants;
   struct free_list free_list;
+  struct event_list event_list;
   int64_t peak_mem_usage_default;
   int64_t cur_mem_usage_default;
   struct program* program;
   // Uniform fields above.
 
+  lock_t event_list_lock;
   struct scheduler scheduler;
   int total_runs;
   long int total_runtime;
@@ -87,11 +89,14 @@ int backend_context_setup(struct futhark_context* ctx) {
     return 1;
   }
 
+  create_lock(&ctx->event_list_lock);
+
   return 0;
 }
 
 void backend_context_teardown(struct futhark_context* ctx) {
   (void)scheduler_destroy(&ctx->scheduler);
+  free_lock(&ctx->event_list_lock);
 }
 
 void backend_context_release(struct futhark_context* ctx) {
@@ -107,5 +112,27 @@ int futhark_context_sync(struct futhark_context* ctx) {
   (void)ctx;
   return 0;
 }
+
+struct mc_event {
+  // Time in microseconds.
+  uint64_t bef, aft;
+};
+
+static struct mc_event* mc_event_new(struct futhark_context* ctx) {
+  if (ctx->profiling && !ctx->profiling_paused) {
+    struct mc_event* e = malloc(sizeof(struct mc_event));
+    return e;
+  } else {
+    return NULL;
+  }
+}
+
+static int mc_event_report(struct str_builder* sb, struct mc_event* e) {
+  float ms = e->aft - e->bef;
+  str_builder(sb, ",\"duration\":%f", ms);
+  free(e);
+  return 0;
+}
+
 
 // End of backends/multicore.h

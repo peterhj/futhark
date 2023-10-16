@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 * Slightly better lexer error messages.
 
+* Fusion across slicing is now possible in some cases.
+
+* New tool: `futhark profile`.
+
 ### Removed
 
 ### Changed

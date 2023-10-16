@@ -465,6 +465,7 @@ struct futhark_context {
   FILE *log;
   struct constants *constants;
   struct free_list free_list;
+  struct event_list event_list;
   int64_t peak_mem_usage_default;
   int64_t cur_mem_usage_default;
   // Uniform fields above.
@@ -496,10 +497,6 @@ struct futhark_context {
   size_t max_bespoke;
 
   size_t lockstep_width;
-
-  struct profiling_record *profiling_records;
-  int profiling_records_capacity;
-  int profiling_records_used;
 
   struct builtin_kernels* kernels;
 };
@@ -975,60 +972,43 @@ static char* cuda_module_setup(struct futhark_context *ctx,
   return NULL;
 }
 
-// Count up the runtime all the profiling_records that occured during execution.
-// Also clears the buffer of profiling_records.
-static CUresult tally_profiling_records(struct futhark_context *ctx,
-                                        struct cost_centres* ccs) {
-  CUresult err;
-  for (int i = 0; i < ctx->profiling_records_used; i++) {
-    struct profiling_record record = ctx->profiling_records[i];
+struct cuda_event {
+  cuEvent start;
+  cuEvent end;
+};
 
-    float ms;
-    if ((err = (ctx->cfg->cuEventElapsedTime)(&ms, record.events[0], record.events[1])) != CUDA_SUCCESS) {
-      return err;
-    }
-
-    if (ccs) {
-      // CUDA provides milisecond resolution, but we want microseconds.
-      struct cost_centre c = {
-        .name = record.name,
-        .runs = 1,
-        .runtime = ms*1000
-      };
-      cost_centres_add(ccs, c);
-    }
-
-    if ((err = (ctx->cfg->cuEventDestroy)(record.events[0])) != CUDA_SUCCESS) {
-      return err;
-    }
-    if ((err = (ctx->cfg->cuEventDestroy)(record.events[1])) != CUDA_SUCCESS) {
-      return err;
-    }
-
-    free(record.events);
+static struct cuda_event* cuda_event_new(struct futhark_context* ctx) {
+  if (ctx->profiling && !ctx->profiling_paused) {
+    struct cuda_event* e = malloc(sizeof(struct cuda_event));
+    (ctx->cfg->cuEventCreate)(&e->start);
+    (ctx->cfg->cuEventCreate)(&e->end);
+    return e;
+  } else {
+    return NULL;
   }
-
-  ctx->profiling_records_used = 0;
-
-  return CUDA_SUCCESS;
 }
 
-// Returns pointer to two events.
-static CUevent* cuda_get_events(struct futhark_context *ctx, const char* name) {
-  if (ctx->profiling_records_used == ctx->profiling_records_capacity) {
-    ctx->profiling_records_capacity *= 2;
-    ctx->profiling_records =
-      realloc(ctx->profiling_records,
-              ctx->profiling_records_capacity *
-              sizeof(struct profiling_record));
+static int cuda_event_report(struct futhark_context *ctx, struct str_builder* sb, struct cuda_event* e) {
+  float ms;
+  CUresult err;
+  if ((err = (ctx->cfg->cuEventElapsedTime)(&ms, e->start, e->end)) != CUDA_SUCCESS) {
+    return err;
   }
-  CUevent *events = calloc(2, sizeof(CUevent));
-  (ctx->cfg->cuEventCreate)(&events[0], 0);
-  (ctx->cfg->cuEventCreate)(&events[1], 0);
-  ctx->profiling_records[ctx->profiling_records_used].events = events;
-  ctx->profiling_records[ctx->profiling_records_used].name = name;
-  ctx->profiling_records_used++;
-  return events;
+
+  // CUDA provides milisecond resolution, but we want microseconds.
+  str_builder(sb, ",\"duration\":%f", ms*1000);
+
+  if ((err = (ctx->cfg->cuEventDestroy)(e->start)) != CUDA_SUCCESS) {
+    return 1;
+  }
+
+  if ((err = (ctx->cfg->cuEventDestroy)(e->end)) != CUDA_SUCCESS) {
+    return 1;
+  }
+
+  free(e);
+
+  return 0;
 }
 
 /*
@@ -1134,11 +1114,6 @@ int backend_context_setup(struct futhark_context* ctx) {
   ctx->dev = ctx->cfg->setup_dev;
   ctx->stream = ctx->cfg->setup_stream;
 
-  ctx->profiling_records_capacity = 200;
-  ctx->profiling_records_used = 0;
-  ctx->profiling_records =
-    malloc(ctx->profiling_records_capacity *
-           sizeof(struct profiling_record));
   ctx->failure_is_an_option = 0;
   ctx->total_runs = 0;
   ctx->total_runtime = 0;
@@ -1193,8 +1168,6 @@ void backend_context_teardown(struct futhark_context* ctx) {
   (ctx->cfg->gpu_global_failure_free)(ctx->global_failure);
   //CUDA_SUCCEED_FATAL(gpu_free_all(ctx));
   //free_list_destroy(&ctx->gpu_free_list);
-  (void)tally_profiling_records(ctx, NULL);
-  free(ctx->profiling_records);
   CUDA_SUCCEED_FATAL((ctx->cfg->cuModuleUnload)(ctx->module));
   //CUDA_SUCCEED_FATAL(cuStreamDestroy(ctx->stream));
   //CUDA_SUCCEED_FATAL((ctx->cfg->cuCtxDestroy)(ctx->cu_ctx));
@@ -1234,14 +1207,18 @@ static void gpu_free_kernel(struct futhark_context *ctx,
 static int gpu_scalar_to_device(struct futhark_context* ctx,
                                 gpu_mem dst, size_t offset, size_t size,
                                 void *src) {
-  CUevent *pevents = NULL;
-  if (ctx->profiling && !ctx->profiling_paused) {
-    pevents = cuda_get_events(ctx, "copy_scalar_to_dev");
-    CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(pevents[0], ctx->stream));
+  struct cuda_event *event = cuda_event_new(ctx);
+  if (event != NULL) {
+    add_event(ctx,
+              "copy_scalar_to_dev",
+              strdup(""),
+              event,
+              (event_report_fn)cuda_event_report);
+    CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(event->start, ctx->stream));
   }
   CUDA_SUCCEED_OR_RETURN((ctx->cfg->cuMemcpyHtoD)(dst + offset, src, size));
-  if (pevents != NULL) {
-    CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(pevents[1], ctx->stream));
+  if (event != NULL) {
+    CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(event->start, ctx->stream));
   }
   return FUTHARK_SUCCESS;
 }
@@ -1249,14 +1226,18 @@ static int gpu_scalar_to_device(struct futhark_context* ctx,
 static int gpu_scalar_from_device(struct futhark_context* ctx,
                                   void *dst,
                                   gpu_mem src, size_t offset, size_t size) {
-  CUevent *pevents = NULL;
-  if (ctx->profiling && !ctx->profiling_paused) {
-    pevents = cuda_get_events(ctx, "copy_scalar_from_dev");
-    CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(pevents[0], ctx->stream));
+  struct cuda_event *event = cuda_event_new(ctx);
+  if (event != NULL) {
+    add_event(ctx,
+              "copy_scalar_from_dev",
+              strdup(""),
+              event,
+              (event_report_fn)cuda_event_report);
+    CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(event->start, ctx->stream));
   }
   CUDA_SUCCEED_OR_RETURN((ctx->cfg->cuMemcpyDtoH)(dst, src + offset, size));
-  if (pevents != NULL) {
-    CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(pevents[1], ctx->stream));
+  if (event != NULL) {
+    CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(event->end, ctx->stream));
   }
   return FUTHARK_SUCCESS;
 }
@@ -1265,14 +1246,18 @@ static int gpu_memcpy(struct futhark_context* ctx,
                       gpu_mem dst, int64_t dst_offset,
                       gpu_mem src, int64_t src_offset,
                       int64_t nbytes) {
-  CUevent *pevents = NULL;
-  if (ctx->profiling && !ctx->profiling_paused) {
-    pevents = cuda_get_events(ctx, "copy_dev_to_dev");
-    CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(pevents[0], ctx->stream));
+  struct cuda_event *event = cuda_event_new(ctx);
+  if (event != NULL) {
+    add_event(ctx,
+              "copy_dev_to_dev",
+              strdup(""),
+              event,
+              (event_report_fn)cuda_event_report);
+    CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(event->start, ctx->stream));
   }
-  CUDA_SUCCEED_OR_RETURN((ctx->cfg->cuMemcpyAsync)(dst+dst_offset, src+src_offset, nbytes, ctx->stream));
-  if (pevents != NULL) {
-    CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(pevents[1], ctx->stream));
+  CUDA_SUCCEED_OR_RETURN((ctx->cfg->cuMemcpy)(dst+dst_offset, src+src_offset, nbytes));
+  if (event != NULL) {
+    CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(event->end, ctx->stream));
   }
   return FUTHARK_SUCCESS;
 }
@@ -1282,10 +1267,14 @@ static int memcpy_host2gpu(struct futhark_context* ctx, bool sync,
                            const unsigned char* src, int64_t src_offset,
                            int64_t nbytes) {
   if (nbytes > 0) {
-    CUevent* pevents = NULL;
-    if (ctx->profiling && !ctx->profiling_paused) {
-      pevents = cuda_get_events(ctx, "copy_host_to_dev");
-      CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(pevents[0], ctx->stream));
+    struct cuda_event *event = cuda_event_new(ctx);
+    if (event != NULL) {
+      add_event(ctx,
+                "copy_host_to_dev",
+                strdup(""),
+                event,
+                (event_report_fn)cuda_event_report);
+      CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(event->start, ctx->stream));
     }
     if (sync) {
       CUDA_SUCCEED_OR_RETURN
@@ -1296,8 +1285,8 @@ static int memcpy_host2gpu(struct futhark_context* ctx, bool sync,
       CUDA_SUCCEED_OR_RETURN
         ((ctx->cfg->cuMemcpyHtoDAsync)(dst + dst_offset, src + src_offset, nbytes, ctx->stream));
     }
-    if (pevents != NULL) {
-      CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(pevents[1], ctx->stream));
+    if (event != NULL) {
+      CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(event->end, ctx->stream));
     }
   }
   return FUTHARK_SUCCESS;
@@ -1308,10 +1297,14 @@ static int memcpy_gpu2host(struct futhark_context* ctx, bool sync,
                            gpu_mem src, int64_t src_offset,
                            int64_t nbytes) {
   if (nbytes > 0) {
-    CUevent* pevents = NULL;
-    if (ctx->profiling && !ctx->profiling_paused) {
-      pevents = cuda_get_events(ctx, "copy_dev_to_host");
-      CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(pevents[0], ctx->stream));
+    struct cuda_event *event = cuda_event_new(ctx);
+    if (event != NULL) {
+      add_event(ctx,
+                "copy_dev_to_host",
+                strdup(""),
+                event,
+                (event_report_fn)cuda_event_report);
+      CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(event->start, ctx->stream));
     }
     if (sync) {
       CUDA_SUCCEED_OR_RETURN
@@ -1321,6 +1314,9 @@ static int memcpy_gpu2host(struct futhark_context* ctx, bool sync,
     } else {
       CUDA_SUCCEED_OR_RETURN
         ((ctx->cfg->cuMemcpyDtoHAsync)(dst + dst_offset, src + src_offset, nbytes, ctx->stream));
+    }
+    if (event != NULL) {
+      CUDA_SUCCEED_FATAL(cuEventRecord(event->end, ctx->stream));
     }
     if (sync &&
         ctx->failure_is_an_option &&
@@ -1341,16 +1337,8 @@ static int gpu_launch_kernel(struct futhark_context* ctx,
                              size_t args_sizes[num_args]) {
   (void) args_sizes;
   int64_t time_start = 0, time_end = 0;
-  if (ctx->logging) {
-    fprintf(ctx->log,
-            "Launching kernel %s with\n"
-            "  grid=(%d,%d,%d)\n"
-            "  block=(%d,%d,%d)\n"
-            "  local memory=%d\n",
-            name,
-            grid[0], grid[1], grid[2],
-            block[0], block[1], block[2],
-            local_mem_bytes);
+
+  if (ctx->debugging) {
     time_start = get_wall_time();
   }
   if (ctx->cfg->tracing) {
@@ -1361,10 +1349,22 @@ static int gpu_launch_kernel(struct futhark_context* ctx,
             local_mem_bytes);
   }
 
-  CUevent *pevents = NULL;
-  if (ctx->profiling && !ctx->profiling_paused) {
-    pevents = cuda_get_events(ctx, name);
-    CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(pevents[0], ctx->stream));
+  struct cuda_event *event = cuda_event_new(ctx);
+
+  if (event != NULL) {
+    CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(event->start, ctx->stream));
+    add_event(ctx,
+              name,
+              msgprintf("Kernel %s with\n"
+                        "  grid=(%d,%d,%d)\n"
+                        "  block=(%d,%d,%d)\n"
+                        "  local memory=%d",
+                        name,
+                        grid[0], grid[1], grid[2],
+                        block[0], block[1], block[2],
+                        local_mem_bytes),
+              event,
+              (event_report_fn)cuda_event_report);
   }
 
   CUDA_SUCCEED_OR_RETURN
@@ -1374,8 +1374,8 @@ static int gpu_launch_kernel(struct futhark_context* ctx,
                     local_mem_bytes, ctx->stream,
                     args, NULL));
 
-  if (pevents != NULL) {
-    CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(pevents[1], ctx->stream));
+  if (event != NULL) {
+    CUDA_SUCCEED_FATAL((ctx->cfg->cuEventRecord)(event->end, ctx->stream));
   }
 
   if (ctx->debugging) {
