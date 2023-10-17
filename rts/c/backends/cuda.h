@@ -973,15 +973,15 @@ static char* cuda_module_setup(struct futhark_context *ctx,
 }
 
 struct cuda_event {
-  cuEvent start;
-  cuEvent end;
+  CUevent start;
+  CUevent end;
 };
 
 static struct cuda_event* cuda_event_new(struct futhark_context* ctx) {
   if (ctx->profiling && !ctx->profiling_paused) {
     struct cuda_event* e = malloc(sizeof(struct cuda_event));
-    (ctx->cfg->cuEventCreate)(&e->start);
-    (ctx->cfg->cuEventCreate)(&e->end);
+    (ctx->cfg->cuEventCreate)(&e->start, 0);
+    (ctx->cfg->cuEventCreate)(&e->end, 0);
     return e;
   } else {
     return NULL;
