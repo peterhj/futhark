@@ -1211,7 +1211,7 @@ evalDec env (OpenDec me _) = do
 evalDec env (ImportDec name name' loc) =
   evalDec env $ LocalDec (OpenDec (ModImport name name' loc) loc) loc
 evalDec env (LocalDec d _) = evalDec env d
-evalDec env SigDec {} = pure env
+evalDec env ModTypeDec {} = pure env
 evalDec env (TypeDec (TypeBind v l ps _ (Info (RetType dims t)) _ _)) = do
   let abbr = T.TypeAbbr l ps . RetType dims $ expandType env t
   pure env {envType = M.insert v abbr $ envType env}
@@ -1919,6 +1919,7 @@ initialCtx =
                 <> prettyText (asInt64 m)
                 <> "]"
           else pure $ toArray shape $ map (toArray rowshape) $ chunk (asInt m) xs'
+    def "manifest" = Just $ fun1 pure
     def "vjp2" = Just $
       fun3 $
         \_ _ _ -> bad noLoc mempty "Interpreter does not support autodiff."

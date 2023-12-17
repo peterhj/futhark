@@ -9,9 +9,25 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Added
 
+* New prelude function: `manifest`.  For doing subtle things to memory.
+
+* The GPU backends now handle up to 20 operators can be handled in a
+  single fused reduction.
+
 ### Removed
 
 ### Changed
+
+### Fixed
+
+* Compatibility with CUDA versions prior than 12.
+
+## [0.25.10]
+
+### Added
+
+* Faster non-commutative reductions in the GPU backends. Work by
+  Anders Holst and Christian Påbøl Jacobsen.
 
 ### Fixed
 
@@ -23,6 +39,21 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 * GPU code generation for non-commutative non-segmented reductions
   with array operands (#2051).
+
+* Histogram with non-vectorised reduction operators (#2056). (But it
+  is probably not a good idea to write such programs.)
+
+* Futhark's LSP server should work better with Eglot.
+
+* Incorrect copy removal inside histograms could cause compiler error
+  (#2058).
+
+* CUDA backend now correctly queries for available shared memory,
+  which affects performance (hopefully positively).
+
+* `futhark literate` now switches to the directory containing the
+  `.fut` file before executing its contents. This fixes accessing
+  files through relative paths.
 
 ## [0.25.9]
 

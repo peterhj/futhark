@@ -914,17 +914,15 @@ checkMemInfo name (MemArray _ shape _ (ArrayIn v ixfun)) = do
 
   TC.context ("in index function " <> prettyText ixfun) $ do
     traverse_ (TC.requirePrimExp int64 . untyped) ixfun
-    let ixfun_rank = IxFun.rank ixfun
-        ident_rank = shapeRank shape
-    unless (ixfun_rank == ident_rank) $
+    unless (IxFun.shape ixfun == map pe64 (shapeDims shape)) $
       TC.bad $
         TC.TypeError $
-          "Arity of index function ("
-            <> prettyText ixfun_rank
-            <> ") does not match rank of array "
+          "Shape of index function ("
+            <> prettyText (IxFun.shape ixfun)
+            <> ") does not match shape of array "
             <> prettyText name
             <> " ("
-            <> prettyText ident_rank
+            <> prettyText shape
             <> ")"
 
 bodyReturnsFromPat ::
@@ -1074,7 +1072,7 @@ expReturns e@(Loop merge _ _) = do
         ( Array pt shape u,
           MemArray _ _ _ (ArrayIn mem ixfun)
           )
-            | Just (i, mem_p) <- isMergeVar mem,
+            | Just (i, mem_p) <- isLoopVar mem,
               Mem space <- paramType mem_p ->
                 pure $ MemArray pt shape u $ Just $ ReturnsNewBlock space i ixfun'
             | otherwise ->
@@ -1089,7 +1087,7 @@ expReturns e@(Loop merge _ _) = do
           pure $ MemPrim pt
         (Mem space, _) ->
           pure $ MemMem space
-    isMergeVar v = find ((== v) . paramName . snd) $ zip [0 ..] mergevars
+    isLoopVar v = find ((== v) . paramName . snd) $ zip [0 ..] mergevars
     mergevars = map fst merge
 expReturns (Apply _ _ ret _) =
   pure $ Just $ map (funReturnsToExpReturns . fst) ret

@@ -158,17 +158,17 @@ struct futhark_context* futhark_context_new(struct futhark_context_config* cfg) 
   ctx->peak_mem_usage_default = 0;
   ctx->cur_mem_usage_default = 0;
   ctx->constants = malloc(sizeof(struct constants));
-  ctx->detail_memory = cfg->debugging;
   ctx->debugging = cfg->debugging;
   ctx->logging = cfg->logging;
+  ctx->detail_memory = cfg->logging;
   ctx->profiling = cfg->profiling;
   ctx->profiling_paused = 0;
   ctx->error = NULL;
   ctx->log = stderr;
+  if (cfg->tracing) printf("TRACE: rts: futhark_context_new: set tuning params...\n");
+  set_tuning_params(ctx);
   if (cfg->tracing) printf("TRACE: rts: futhark_context_new: setup backend...\n");
   if (backend_context_setup(ctx) == 0) {
-    if (cfg->tracing) printf("TRACE: rts: futhark_context_new: set tuning params...\n");
-    set_tuning_params(ctx);
     if (cfg->tracing) printf("TRACE: rts: futhark_context_new: setup program...\n");
     setup_program(ctx);
     if (cfg->tracing) printf("TRACE: rts: futhark_context_new: init constants...\n");
